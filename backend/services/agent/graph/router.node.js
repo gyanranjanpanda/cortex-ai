@@ -120,15 +120,20 @@ ${state.prompt}
 
  `);
 
- return {
+  const allowedAgents = ["chat", "search", "coding", "pdf", "ppt", "image"];
+  let selectedAgent = result.content ? result.content.trim().toLowerCase().replace(/[^a-z_]/g, "") : "chat";
 
-  ...state,
+  if (!allowedAgents.includes(selectedAgent)) {
+    const p = state.prompt.toLowerCase();
+    if (p.includes("code") || p.includes("landing") || p.includes("build") || p.includes("create") || p.includes("game") || p.includes("page")) {
+      selectedAgent = "coding";
+    } else {
+      selectedAgent = "chat";
+    }
+  }
 
-  agent:
-  result.content
-   .trim()
-   .toLowerCase()
-
- };
-
+  return {
+    ...state,
+    agent: selectedAgent
+  };
 };
