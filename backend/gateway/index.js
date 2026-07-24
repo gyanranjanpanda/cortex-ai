@@ -13,11 +13,19 @@ dotenv.config();
 const app = express();
 const port=process.env.PORT || 5000
 app.use(cors({
-    origin: [
-        process.env.FRONTEND_URL || "http://localhost:5173",
-        "http://localhost:5173",
-        "http://localhost:5174",
-    ],
+    origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const cleanOrigin = origin.replace(/\/$/, "");
+        const allowedFrontend = (process.env.FRONTEND_URL || "").replace(/\/$/, "");
+        if (
+            cleanOrigin === allowedFrontend ||
+            cleanOrigin.includes("localhost") ||
+            cleanOrigin.endsWith(".up.railway.app")
+        ) {
+            return callback(null, true);
+        }
+        return callback(null, true);
+    },
     credentials: true
 }));
 app.use(
