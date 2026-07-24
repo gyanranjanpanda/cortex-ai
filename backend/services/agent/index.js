@@ -5,7 +5,7 @@ import router from "./routes/agent.route.js";
 dotenv.config();
 const app = express();
 app.use(express.json());
-const port=process.env.PORT
+const port = process.env.AGENT_PORT || 8003
 
 app.use("/",router);
 

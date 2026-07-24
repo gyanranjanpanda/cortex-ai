@@ -6,7 +6,7 @@ import connectDB from "./config/db.js";
 dotenv.config();
 const app = express();
 app.use(express.json());
-const port=process.env.PORT
+const port = process.env.CHAT_PORT || 8002
 
 
 app.use("/",router)

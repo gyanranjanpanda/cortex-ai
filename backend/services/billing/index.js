@@ -6,7 +6,7 @@ import connectDB from "./config/db.js";
 import dotenv from "dotenv"
 import router from "./routes/billing.routes.js";
 dotenv.config()
-const port=process.env.PORT
+const port = process.env.BILLING_PORT || 8004
 const app =
 express();
 
