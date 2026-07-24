@@ -29,6 +29,40 @@ export default function ArtifactPanel() {
     ? /<!DOCTYPE\s+html/i.test(htmlFile.content) || /<html[\s>]/i.test(htmlFile.content)
     : false;
 
+  // Injected into every preview: auto-starts games without requiring user click/keypress.
+  // Works by focusing the canvas and dispatching synthetic events after the page settles.
+  const gameBootstrap = `
+<script>
+(function() {
+  function bootstrap() {
+    // Focus the document and any canvas so keyboard events are received immediately
+    try { document.body.focus(); } catch(e) {}
+    const canvas = document.querySelector('canvas');
+    if (canvas) {
+      canvas.setAttribute('tabindex', '0');
+      canvas.focus();
+      // Simulate a click to trigger any 'click to start' handlers
+      canvas.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    }
+    // Dispatch arrow key to trigger 'press key to start' game loops
+    const keyEvents = [
+      new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true }),
+      new KeyboardEvent('keydown', { key: 'ArrowLeft',  code: 'ArrowLeft',  keyCode: 37, which: 37, bubbles: true }),
+    ];
+    keyEvents.forEach(e => {
+      document.dispatchEvent(e);
+      if (canvas) canvas.dispatchEvent(e);
+    });
+  }
+  // Run after page fully loads and scripts have had time to register listeners
+  if (document.readyState === 'complete') {
+    setTimeout(bootstrap, 200);
+  } else {
+    window.addEventListener('load', () => setTimeout(bootstrap, 200));
+  }
+})();
+<\/script>`;
+
   let previewDoc;
   if (isFullDoc) {
     // Inject external CSS and JS into the existing document so styles/scripts apply
@@ -50,7 +84,10 @@ export default function ArtifactPanel() {
         doc += scriptTag;
       }
     }
-    previewDoc = doc;
+    // Inject bootstrap before </body>
+    previewDoc = /<\/body>/i.test(doc)
+      ? doc.replace(/<\/body>/i, `${gameBootstrap}\n</body>`)
+      : doc + gameBootstrap;
   } else {
     previewDoc = `<!DOCTYPE html>
 <html>
@@ -62,9 +99,11 @@ export default function ArtifactPanel() {
 <body>
 ${htmlFile?.content || ""}
 <script>${jsFile?.content || ""}<\/script>
+${gameBootstrap}
 </body>
 </html>`;
   }
+
 
 
   const handleCopy = () => {
