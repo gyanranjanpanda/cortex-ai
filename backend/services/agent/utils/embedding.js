@@ -5,7 +5,8 @@ export const embeddings =
 new GoogleGenerativeAIEmbeddings({
 
     apiKey:
-    process.env.GOOGLE_API_KEY,
+    process.env.GOOGLE_API_KEY || "placeholder_key",
+
 
     model:
     "gemini-embedding-001"
