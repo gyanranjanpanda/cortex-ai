@@ -6,17 +6,21 @@ import { debateAndCode } from "../utils/modelDebate.js";
 
 export const codingAgent = async (state) => {
 
-await checkAgentLimit(
-    state.userId,
-    "coding"
-  );
- await deductCredits(
+  await checkAgentLimit(state.userId, "coding");
 
-        state.userId,
-
-        "coding"
-
-    );
+  // Try to deduct credits. If insufficient, fall back to free Groq mode
+  // instead of blocking the user entirely.
+  let useFreeMode = false;
+  try {
+    await deductCredits(state.userId, "coding");
+  } catch (creditErr) {
+    if (creditErr.status === 402 || creditErr.data?.title === "Insufficient Credits") {
+      console.warn("[coding-agent] Insufficient credits — switching to free Groq mode");
+      useFreeMode = true;
+    } else {
+      throw creditErr; // rethrow unrelated errors
+    }
+  }
 
 function cleanCode(code = "") {
   return code
@@ -251,9 +255,6 @@ ${state.prompt}`);
   let finalResponse = response;
 
   if (isCodeGen) {
-    // ── Multi-Agent Debate: Architect → Critic → Coder ────────────────────
-    console.log("[coding-agent] CODE_GENERATION — starting 3-round debate pipeline");
-
     const outputFormat = `
 Return ONLY the code files in this exact format (no markdown, no explanation):
 
@@ -270,10 +271,23 @@ For GAMES: put everything in a single FILE: index.html with inline <style> and <
 Generate complete, fully working code — no placeholders, no truncation.
 `;
 
-    const debateResult = await debateAndCode(state.prompt, outputFormat);
-    finalResponse = { content: debateResult.finalCode };
-    console.log("[coding-agent] Debate complete — final code ready");
+    if (useFreeMode) {
+      // ── Free Mode: Groq direct generation (no debate, no credit cost) ──────
+      console.log("[coding-agent] Free mode — generating with Groq directly");
+      const groq = getModel("chat"); // Groq → Gemini fallback chain
+      const groqResponse = await groq.invoke(
+        `You are an expert coder. Generate complete, fully working code for: "${state.prompt}"\n\n${outputFormat}`
+      );
+      finalResponse = { content: groqResponse.content };
+    } else {
+      // ── Premium Mode: 3-round multi-agent debate ──────────────────────────
+      console.log("[coding-agent] CODE_GENERATION — starting 3-round debate pipeline");
+      const debateResult = await debateAndCode(state.prompt, outputFormat);
+      finalResponse = { content: debateResult.finalCode };
+      console.log("[coding-agent] Debate complete — final code ready");
+    }
   }
+
 
   const content = finalResponse.content?.trim();
 
