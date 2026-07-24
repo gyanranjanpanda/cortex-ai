@@ -87,14 +87,14 @@ export const login = async (
       60 * 60 * 24 * 7
     );
 
-    const isLocalhost = req.hostname === "localhost" || req.hostname === "127.0.0.1";
+    const isProd = process.env.NODE_ENV === "production";
     res.cookie(
       "session",
       sessionId,
       {
         httpOnly: true,
-        secure: !isLocalhost,
-        sameSite: !isLocalhost ? "none" : "lax",
+        secure: isProd,
+        sameSite: isProd ? "none" : "lax",
         maxAge: 1000 * 60 * 60 * 24 * 7,
       }
     );
@@ -139,15 +139,16 @@ export const logout =
 
       }
 
-      const isLocalhost = req.hostname === "localhost" || req.hostname === "127.0.0.1";
+      const isProd = process.env.NODE_ENV === "production";
       res.clearCookie(
         "session",
         {
           httpOnly: true,
-          secure: !isLocalhost,
-          sameSite: !isLocalhost ? "none" : "lax"
+          secure: isProd,
+          sameSite: isProd ? "none" : "lax"
         }
       );
+
 
 
 
