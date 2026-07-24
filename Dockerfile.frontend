@@ -21,5 +21,5 @@ RUN npm install -g serve
 
 COPY --from=builder /app/dist ./dist
 
-# Use $PORT from Railway at runtime, fallback to 3000 locally
-CMD serve -s dist -l ${PORT:-3000}
+# Railway injects $PORT at runtime — use sh -c to ensure expansion
+CMD ["/bin/sh", "-c", "serve -s dist -l ${PORT:-3000}"]
