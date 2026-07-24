@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install backend root deps (shared ioredis/dotenv)
+COPY backend/package*.json ./
+RUN npm ci --omit=dev
+
+# Install agent service deps
+COPY backend/services/agent/package*.json ./services/agent/
+RUN cd services/agent && npm ci --omit=dev
+
+# Copy source
+COPY backend/services/agent ./services/agent
+COPY backend/shared ./shared
+
+WORKDIR /app/services/agent
+
+EXPOSE 8003
+
+CMD ["npm", "start"]

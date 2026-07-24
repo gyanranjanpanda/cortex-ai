@@ -1,0 +1,21 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install backend root deps (shared ioredis/dotenv)
+COPY backend/package*.json ./
+RUN npm ci --omit=dev
+
+# Install gateway deps
+COPY backend/gateway/package*.json ./gateway/
+RUN cd gateway && npm ci --omit=dev
+
+# Copy source
+COPY backend/gateway ./gateway
+COPY backend/shared ./shared
+
+WORKDIR /app/gateway
+
+EXPOSE 8000
+
+CMD ["npm", "start"]
