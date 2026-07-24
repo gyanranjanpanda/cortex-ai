@@ -16,8 +16,9 @@ const openRouter = new ChatOpenRouter({
 export const gemini =
   new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
-    apiKey: process.env.GOOGLE_API_KEY
+    apiKey: process.env.GOOGLE_API_KEY || "placeholder_key"
   });
+
 
 const groq = new ChatGroq({
   model: "llama-3.3-70b-versatile",
