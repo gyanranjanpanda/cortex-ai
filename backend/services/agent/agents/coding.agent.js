@@ -231,7 +231,7 @@ ${state.prompt}`);
 
   const content =
     response.content?.trim();
-console.log(content)
+
   const files = [];
 
   const matches = [
@@ -240,54 +240,41 @@ console.log(content)
     )
   ];
 
-  if(matches.length){
+  if (matches.length) {
 
     matches.forEach(match => {
-
       files.push({
-  name: match[1].trim(),
-  content: cleanCode(match[2]),
-});
-
+        name: match[1].trim(),
+        content: cleanCode(match[2]),
+      });
     });
 
-  }else{
+  } else if (!content.includes("FILE:")) {
 
-    let fileName = "main.js";
+    // Check if the raw content looks like HTML — if so treat it as index.html
+    const isHtml = /<(!DOCTYPE|html|head|body)/i.test(content);
+    const prompt = state.prompt.toLowerCase();
 
-    const prompt =
-      state.prompt.toLowerCase();
-
-    if(prompt.includes("html")){
-      fileName = "index.html";
+    if (isHtml) {
+      files.push({ name: "index.html", content: cleanCode(content) });
+    } else {
+      // Not a multi-file response — return as plain markdown answer
+      return {
+        ...state,
+        response: content,
+        artifacts: []
+      };
     }
-    else if(prompt.includes("css")){
-      fileName = "style.css";
-    }
-    else if(prompt.includes("python")){
-      fileName = "main.py";
-    }
-    else if(prompt.includes("java")){
-      fileName = "Main.java";
-    }
-    else if(prompt.includes("c++")){
-      fileName = "main.cpp";
-    }
-
-   
-
- 
-
   }
 
+  if (!files.length) {
+    return {
+      ...state,
+      response: content,
+      artifacts: []
+    };
+  }
 
-  if (!content.includes("FILE:")) {
-  return {
-    ...state,
-    response: content,
-    artifacts: []
-  };
-}
 
   return {
 

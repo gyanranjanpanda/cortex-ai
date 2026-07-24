@@ -24,7 +24,35 @@ export default function ArtifactPanel() {
   const jsFile     = artifact?.files?.find(f => f.name === "script.js");
   const canPreview = Boolean(htmlFile);
 
-  const previewDoc = `<!DOCTYPE html>
+  // Detect whether index.html is already a full HTML document
+  const isFullDoc = htmlFile?.content
+    ? /<!DOCTYPE\s+html/i.test(htmlFile.content) || /<html[\s>]/i.test(htmlFile.content)
+    : false;
+
+  let previewDoc;
+  if (isFullDoc) {
+    // Inject external CSS and JS into the existing document so styles/scripts apply
+    let doc = htmlFile.content;
+    if (cssFile?.content) {
+      const styleTag = `<style>\n${cssFile.content}\n</style>`;
+      // Inject before closing </head> if present, otherwise before <body>
+      if (/<\/head>/i.test(doc)) {
+        doc = doc.replace(/<\/head>/i, `${styleTag}\n</head>`);
+      } else {
+        doc = doc.replace(/<body/i, `${styleTag}\n<body`);
+      }
+    }
+    if (jsFile?.content) {
+      const scriptTag = `<script>\n${jsFile.content}\n<\/script>`;
+      if (/<\/body>/i.test(doc)) {
+        doc = doc.replace(/<\/body>/i, `${scriptTag}\n</body>`);
+      } else {
+        doc += scriptTag;
+      }
+    }
+    previewDoc = doc;
+  } else {
+    previewDoc = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8"/>
@@ -36,6 +64,8 @@ ${htmlFile?.content || ""}
 <script>${jsFile?.content || ""}<\/script>
 </body>
 </html>`;
+  }
+
 
   const handleCopy = () => {
     navigator.clipboard.writeText(file?.content || "");
@@ -130,7 +160,7 @@ ${htmlFile?.content || ""}
         <AnimatePresence mode="wait">
           {tab === "preview" && canPreview ? (
             <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">
-              <iframe title="preview" sandbox="allow-scripts" srcDoc={previewDoc} className="w-full h-full bg-white" />
+              <iframe title="preview" sandbox="allow-scripts allow-same-origin allow-modals allow-forms" srcDoc={previewDoc} className="w-full h-full bg-white" />
             </motion.div>
           ) : (
             <motion.div key={`code-${activeFile}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">
