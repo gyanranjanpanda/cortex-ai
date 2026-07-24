@@ -1,6 +1,8 @@
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { getModel } from "../utils/model.js";
+import { debateAndCode } from "../utils/modelDebate.js";
+
 
 export const codingAgent = async (state) => {
 
@@ -232,18 +234,45 @@ Do NOT generate project files.
 TOKEN BUDGET
 =========================
 
-Maximum ~2000 output tokens.
-
-Prefer concise but beautiful code.
-
-Generate only what is required.
+Generate complete, fully working code — do NOT truncate.
 
 User Request:
 
 ${state.prompt}`);
 
-  const content =
-    response.content?.trim();
+  // ── Detect intent from initial classification ─────────────────────────────
+  const rawContent = response.content || "";
+  const isCodeGen = /CODE_GENERATION/.test(rawContent);
+
+  let finalResponse = response;
+
+  if (isCodeGen) {
+    // ── Multi-Agent Debate: Architect → Critic → Coder ────────────────────
+    console.log("[coding-agent] CODE_GENERATION — starting 3-round debate pipeline");
+
+    const outputFormat = `
+Return ONLY the code files in this exact format (no markdown, no explanation):
+
+FILE: index.html
+...
+
+FILE: style.css
+...
+
+FILE: script.js
+...
+
+For GAMES: put everything in a single FILE: index.html with inline <style> and <script>.
+Generate complete, fully working code — no placeholders, no truncation.
+`;
+
+    const debateResult = await debateAndCode(state.prompt, outputFormat);
+    finalResponse = { content: debateResult.finalCode };
+    console.log("[coding-agent] Debate complete — final code ready");
+  }
+
+  const content = finalResponse.content?.trim();
+
 
   const files = [];
 
