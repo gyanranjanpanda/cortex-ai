@@ -1,0 +1,36 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install backend root dependencies
+COPY backend/package*.json ./
+RUN npm ci --omit=dev
+
+# Install all microservices dependencies
+COPY backend/gateway/package*.json ./gateway/
+RUN cd gateway && npm ci --omit=dev
+
+COPY backend/services/auth/package*.json ./services/auth/
+RUN cd services/auth && npm ci --omit=dev
+
+COPY backend/services/chat/package*.json ./services/chat/
+RUN cd services/chat && npm ci --omit=dev
+
+COPY backend/services/agent/package*.json ./services/agent/
+RUN cd services/agent && npm ci --omit=dev
+
+COPY backend/services/billing/package*.json ./services/billing/
+RUN cd services/billing && npm ci --omit=dev
+
+# Copy shared code and all microservices source
+COPY backend/shared ./shared
+COPY backend/gateway ./gateway
+COPY backend/services ./services
+
+# Copy start script
+COPY backend/start-production.sh ./start-production.sh
+RUN chmod +x ./start-production.sh
+
+EXPOSE 8000
+
+CMD ["./start-production.sh"]
