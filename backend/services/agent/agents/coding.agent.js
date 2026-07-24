@@ -193,8 +193,9 @@ When the user asks for a GAME (pac-man, snake, tetris, chess, etc.):
 - Style the page with a dark background so the canvas is clearly visible
 - IMPORTANT: Start drawing to the canvas IMMEDIATELY in window.onload or DOMContentLoaded — NEVER wait for a keypress before rendering. Draw the initial game state (maze, player, ghosts) right away.
 - Show a "Press Arrow Key to Play" text overlay ON the canvas itself (drawn with fillText), NOT as a blocker that prevents rendering.
-- Attach keyboard listeners to BOTH the canvas element AND document so arrow keys work even without clicking the canvas first: `document.addEventListener('keydown', handler)` AND `canvas.addEventListener('keydown', handler)`
-- Call `canvas.focus()` immediately after getting the canvas reference so it receives input without user clicking.
+- Attach keyboard listeners to BOTH the canvas element AND document so arrow keys work even without clicking the canvas first: document.addEventListener('keydown', handler) AND canvas.addEventListener('keydown', handler)
+- Call canvas.focus() immediately after getting the canvas reference so it receives input without user clicking.
+
 
 =========================
 JAVASCRIPT
