@@ -49,6 +49,7 @@ Step-by-step order to build this correctly so nothing is left undefined.
 
 Be specific, technical, and concise. No code yet.`;
 
+
   const architectResponse = await gemini.invoke(architectPrompt);
   const architectPlan = architectResponse.content;
   console.log("[debate] Round 1 complete — Architect plan ready");
