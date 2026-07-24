@@ -30,38 +30,66 @@ export default function ArtifactPanel() {
     : false;
 
   // Injected into every preview: auto-starts games without requiring user click/keypress.
-  // Works by focusing the canvas and dispatching synthetic events after the page settles.
+  // Fires at multiple intervals and dispatches ALL common start-game inputs.
   const gameBootstrap = `
 <script>
 (function() {
-  function bootstrap() {
-    // Focus the document and any canvas so keyboard events are received immediately
+  var ALL_KEYS = [
+    { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39 },
+    { key: 'ArrowLeft',  code: 'ArrowLeft',  keyCode: 37, which: 37 },
+    { key: 'ArrowUp',    code: 'ArrowUp',    keyCode: 38, which: 38 },
+    { key: 'ArrowDown',  code: 'ArrowDown',  keyCode: 40, which: 40 },
+    { key: ' ',          code: 'Space',      keyCode: 32, which: 32 },
+    { key: 'Enter',      code: 'Enter',      keyCode: 13, which: 13 },
+  ];
+
+  function fireEvents() {
+    // Focus
     try { document.body.focus(); } catch(e) {}
-    const canvas = document.querySelector('canvas');
+    var canvas = document.querySelector('canvas');
     if (canvas) {
       canvas.setAttribute('tabindex', '0');
       canvas.focus();
-      // Simulate a click to trigger any 'click to start' handlers
       canvas.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      canvas.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
     }
-    // Dispatch arrow key to trigger 'press key to start' game loops
-    const keyEvents = [
-      new KeyboardEvent('keydown', { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39, which: 39, bubbles: true }),
-      new KeyboardEvent('keydown', { key: 'ArrowLeft',  code: 'ArrowLeft',  keyCode: 37, which: 37, bubbles: true }),
-    ];
-    keyEvents.forEach(e => {
-      document.dispatchEvent(e);
-      if (canvas) canvas.dispatchEvent(e);
+
+    // Dispatch all common start keys on document AND canvas
+    ALL_KEYS.forEach(function(k) {
+      var down = new KeyboardEvent('keydown', { key: k.key, code: k.code, keyCode: k.keyCode, which: k.which, bubbles: true, cancelable: true });
+      var up   = new KeyboardEvent('keyup',   { key: k.key, code: k.code, keyCode: k.keyCode, which: k.which, bubbles: true, cancelable: true });
+      document.dispatchEvent(down);
+      document.dispatchEvent(up);
+      if (canvas) { canvas.dispatchEvent(down); canvas.dispatchEvent(up); }
+      window.dispatchEvent(down);
+    });
+
+    // Patch common game-state variables that gate rendering behind a boolean
+    var stateNames = ['gameStarted','started','isStarted','running','isRunning','gameRunning','playing','isPlaying','active','gameActive','paused'];
+    stateNames.forEach(function(name) {
+      try { if (window[name] === false) window[name] = true; } catch(e) {}
+    });
+
+    // If there's a global start/init function, call it
+    var startFns = ['startGame','start','init','begin','play','initGame','runGame','gameStart'];
+    startFns.forEach(function(fn) {
+      try { if (typeof window[fn] === 'function') window[fn](); } catch(e) {}
     });
   }
-  // Run after page fully loads and scripts have had time to register listeners
-  if (document.readyState === 'complete') {
-    setTimeout(bootstrap, 200);
-  } else {
-    window.addEventListener('load', () => setTimeout(bootstrap, 200));
-  }
+
+  // Fire at multiple intervals to catch slow-loading game scripts
+  var delays = [300, 700, 1200, 2000];
+  delays.forEach(function(ms) {
+    if (document.readyState === 'complete') {
+      setTimeout(fireEvents, ms);
+    } else {
+      window.addEventListener('load', function() { setTimeout(fireEvents, ms); });
+    }
+  });
 })();
 <\/script>`;
+
+
 
   let previewDoc;
   if (isFullDoc) {
