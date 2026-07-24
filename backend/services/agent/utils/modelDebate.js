@@ -1,26 +1,25 @@
-import { gemini, getModel } from "./model.js";
+import { getModel } from "./model.js";
 
 /**
  * Multi-agent debate pipeline for code generation.
  *
- * Round 1 — Architect (Gemini): Plans the solution structure, components,
- *            algorithms, and known edge cases.
+ * All three rounds use the fallback chain defined in model.js:
+ *   - Architect & Coder: getModel("coding")  → Gemini → Groq → DeepSeek
+ *   - Critic:            getModel("chat")     → Groq → Gemini
  *
- * Round 2 — Critic (Groq): Reviews the plan. Points out gaps, bugs,
- *            performance issues, and proposes improvements.
+ * If Gemini quota is exceeded mid-debate, every round automatically
+ * retries with the next model in the chain — no manual intervention needed.
  *
- * Round 3 — Coder (Gemini): Generates the final code using the refined
- *            plan as its blueprint.
- *
- * This produces significantly better code than a single-model approach
- * because design decisions are validated before a line of code is written.
+ * This pipeline is UNIVERSAL — it applies to any code generation request,
+ * not just games. The output format is passed in by the caller.
  */
 export async function debateAndCode(userPrompt, outputFormat) {
-  const groq = getModel("chat");
-
-  console.log("[debate] Round 1 — Architect planning...");
+  const codingModel = getModel("coding"); // Gemini → Groq → DeepSeek
+  const criticModel  = getModel("chat");  // Groq → Gemini (different perspective)
 
   // ── Round 1: Architect ─────────────────────────────────────────────────────
+  console.log("[debate] Round 1 — Architect planning...");
+
   const architectPrompt = `You are a senior software architect.
 
 The user wants to build: "${userPrompt}"
@@ -33,24 +32,26 @@ Respond with:
 What exactly are we building?
 
 ## Tech Stack
-Which HTML/CSS/JS APIs, Canvas methods, or libraries will be used? Why?
+Which HTML/CSS/JS APIs, Canvas methods, libraries, or browser APIs will be used? Why?
 
 ## Components
-List every major component (e.g. game loop, collision system, renderer, state machine).
+List every major component with its responsibility.
 
 ## Algorithms & Data Structures
-Describe the core logic (e.g. maze generation, pathfinding, physics).
+Describe the core logic in detail (state machines, data structures, rendering pipeline, etc.).
 
 ## Edge Cases & Pitfalls
 What commonly goes wrong when building this? List at least 5 specific pitfalls and how to avoid them.
 
+## Interactive Requirements
+How does user input work? (keyboard, mouse, touch) What events are needed?
+
 ## Implementation Order
-Step-by-step order to build this correctly so nothing is left undefined.
+Step-by-step order to build this correctly so nothing is left undefined or broken.
 
 Be specific, technical, and concise. No code yet.`;
 
-
-  const architectResponse = await gemini.invoke(architectPrompt);
+  const architectResponse = await codingModel.invoke(architectPrompt);
   const architectPlan = architectResponse.content;
   console.log("[debate] Round 1 complete — Architect plan ready");
 
@@ -73,17 +74,17 @@ Respond with:
 2-3 things the plan gets right.
 
 ## Problems & Gaps
-Specific issues — missing logic, wrong approach, undefined behavior, performance problems.
+Specific issues — missing logic, wrong approach, undefined behavior, performance problems, interaction bugs.
 
 ## Improvements
 For each problem above, give a concrete fix or better approach.
 
 ## Refined Implementation Notes
-A final summary of the improved plan that the coder should follow.
+A final summary of the improved plan that the coder should follow. Be exhaustive — the coder will only read this section.
 
 Be direct, specific, and technical.`;
 
-  const criticResponse = await groq.invoke(criticPrompt);
+  const criticResponse = await criticModel.invoke(criticPrompt);
   const criticFeedback = criticResponse.content;
   console.log("[debate] Round 2 complete — Critic review ready");
 
@@ -94,7 +95,7 @@ Be direct, specific, and technical.`;
 
 The user wants: "${userPrompt}"
 
-Two senior engineers have reviewed and planned this for you:
+Two senior engineers have reviewed and refined the plan for you:
 
 === ARCHITECT'S PLAN ===
 ${architectPlan}
@@ -104,11 +105,11 @@ ${architectPlan}
 ${criticFeedback}
 =============================
 
-Using this refined plan, generate the complete, fully working code.
+Using this refined plan as your blueprint, generate the complete, fully working code.
 
 ${outputFormat}`;
 
-  const coderResponse = await gemini.invoke(coderPrompt);
+  const coderResponse = await codingModel.invoke(coderPrompt);
   console.log("[debate] Round 3 complete — Final code generated");
 
   return {
