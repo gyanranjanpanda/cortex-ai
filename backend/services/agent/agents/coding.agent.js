@@ -161,10 +161,10 @@ DESIGN & UI EXCELLENCE MANDATE
 
 - Create stunning, high-end, visual WOW-factor interfaces.
 - USE DARK THEME BY DEFAULT with sleek dark background (#090d16 / #111827) and curated neon/pastel accent gradients (e.g. linear-gradient(135deg, #6366f1, #8b5cf6)).
-- ALWAYS IMPORT modern typography: `@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');` and apply `font-family: 'Inter', sans-serif;`.
-- Use Glassmorphism: `background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); shadow: 0 10px 30px rgba(0,0,0,0.5);`.
+- ALWAYS IMPORT modern typography: \`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');\` and apply \`font-family: 'Inter', sans-serif;\`.
+- Use Glassmorphism: \`background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); shadow: 0 10px 30px rgba(0,0,0,0.5);\`.
 - Use rich CSS variables for colors, spacing, and border-radii.
-- Add interactive hover effects, smooth transitions (`transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1)`), and dynamic canvas/UI layout.
+- Add interactive hover effects, smooth transitions (\`transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1)\`), and dynamic canvas/UI layout.
 - Spacing must be generous (padding: 2rem+), responsive, and look like a $100,000 product dashboard/website.
 
 =========================
