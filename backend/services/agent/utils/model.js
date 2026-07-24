@@ -5,11 +5,11 @@ import dotenv from "dotenv"
 dotenv.config()
 import { ChatOpenRouter } from "@langchain/openrouter";
 
-const openRouter = new ChatOpenRouter({
+// DeepSeek via OpenRouter — best coding model, handles long game/app code
+const deepseek = new ChatOpenRouter({
   model: "deepseek/deepseek-chat",
   temperature: 0,
-  maxTokens:2500
-  // other params...
+  maxTokens: 8192,
 });
 
 
@@ -20,12 +20,12 @@ export const gemini =
   });
 
 
+// Groq/LLaMA — fast model for quick tasks (search, chat, image prompts)
 const groq = new ChatGroq({
   model: "llama-3.3-70b-versatile",
   temperature: 0,
-  maxTokens: undefined,
+  maxTokens: 4096,
   maxRetries: 2,
-  // other params...
 })
 
 
@@ -35,7 +35,8 @@ export const getModel =
     switch (agent) {
 
       case "coding":
-        return groq;
+        // DeepSeek is far superior for generating complete, working code
+        return deepseek;
 
       case "image":
         return groq;
