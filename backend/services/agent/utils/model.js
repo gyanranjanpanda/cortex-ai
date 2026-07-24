@@ -16,8 +16,10 @@ const deepseek = new ChatOpenRouter({
 export const gemini =
   new ChatGoogleGenerativeAI({
     model: "gemini-2.5-flash",
-    apiKey: process.env.GOOGLE_API_KEY || "placeholder_key"
+    apiKey: process.env.GOOGLE_API_KEY || "placeholder_key",
+    maxOutputTokens: 8192,
   });
+
 
 
 // Groq/LLaMA — fast model for quick tasks (search, chat, image prompts)
@@ -35,8 +37,9 @@ export const getModel =
     switch (agent) {
 
       case "coding":
-        // DeepSeek is far superior for generating complete, working code
-        return deepseek;
+        // Gemini 2.5 Flash — free (1500 req/day), excellent at code generation
+        return gemini;
+
 
       case "image":
         return groq;
