@@ -7,9 +7,9 @@ RUN npm ci
 
 COPY frontend/ ./
 
-# VITE_API_URL must be provided as a build arg for production
-ARG VITE_API_URL
-ENV VITE_API_URL=$VITE_API_URL
+# Bake production environment variables at build time
+ENV VITE_SERVER_URL=https://cortex-ai-production-b653.up.railway.app
+ENV VITE_FIREBASE_API_KEY=AIzaSyD5CDYsJnDgY48ZPbTaqI5wFjoZXhIz8WA
 
 RUN npm run build
 
@@ -21,6 +21,5 @@ RUN npm install -g serve
 
 COPY --from=builder /app/dist ./dist
 
-EXPOSE 3000
-
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Use $PORT from Railway at runtime, fallback to 3000 locally
+CMD serve -s dist -l ${PORT:-3000}
