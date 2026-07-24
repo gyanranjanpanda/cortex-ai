@@ -160,7 +160,15 @@ ${htmlFile?.content || ""}
         <AnimatePresence mode="wait">
           {tab === "preview" && canPreview ? (
             <motion.div key="preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">
-              <iframe title="preview" sandbox="allow-scripts allow-same-origin allow-modals allow-forms" srcDoc={previewDoc} className="w-full h-full bg-white" />
+              <iframe
+                title="preview"
+                sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-pointer-lock"
+                srcDoc={previewDoc}
+                className="w-full h-full"
+                style={{ background: "transparent", border: "none" }}
+                tabIndex={0}
+                onLoad={e => e.target.focus()}
+              />
             </motion.div>
           ) : (
             <motion.div key={`code-${activeFile}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="w-full h-full">

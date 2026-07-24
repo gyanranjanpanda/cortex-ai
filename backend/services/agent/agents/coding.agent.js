@@ -176,14 +176,27 @@ Always use real Unsplash images.
 Never use placeholders.
 
 =========================
+GAMES & INTERACTIVE APPS
+=========================
+
+When the user asks for a GAME (pac-man, snake, tetris, chess, etc.):
+
+- Put ALL code in a SINGLE self-contained FILE: index.html
+- Include inline <style> and inline <script> — do NOT split into separate files
+- Implement COMPLETE game logic — maze layout, movement, collision detection, score tracking, lives, win/lose states, keyboard controls
+- Games MUST be fully playable — arrow keys for movement, spacebar for pause, etc.
+- Include a scoreboard / HUD displaying score, level, and lives
+- Use requestAnimationFrame for smooth animation loops
+- Canvas games: draw everything procedurally (maze walls, pellets, sprites) — do NOT use image files
+- Style the page with a dark background so the canvas is clearly visible
+- Add a "Click to Start / Press Arrow Key to Start" instruction on first load
+
+=========================
 JAVASCRIPT
 =========================
 
-Keep JS minimal.
-
-Only interactive logic.
-
-No unnecessary functions.
+For websites: Keep JS minimal — only interactive logic, no unnecessary functions.
+For games: Write complete, fully functional game code with no shortcuts.
 
 =========================
 OUTPUT
