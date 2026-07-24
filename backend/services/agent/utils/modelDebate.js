@@ -14,8 +14,10 @@ import { getModel } from "./model.js";
  * not just games. The output format is passed in by the caller.
  */
 export async function debateAndCode(userPrompt, outputFormat) {
-  const codingModel = getModel("coding"); // Gemini → Groq → DeepSeek
-  const criticModel  = getModel("chat");  // Groq → Gemini (different perspective)
+  const architectModel = getModel("chat");   // Groq LLaMA → Gemini fallback (fast planner)
+  const criticModel    = getModel("coding"); // Gemini → Groq fallback (deep reviewer)
+  const coderModel     = getModel("coding"); // Gemini → Groq → DeepSeek (final code)
+
 
   // ── Round 1: Architect ─────────────────────────────────────────────────────
   console.log("[debate] Round 1 — Architect planning...");
@@ -51,7 +53,7 @@ Step-by-step order to build this correctly so nothing is left undefined or broke
 
 Be specific, technical, and concise. No code yet.`;
 
-  const architectResponse = await codingModel.invoke(architectPrompt);
+  const architectResponse = await architectModel.invoke(architectPrompt);
   const architectPlan = architectResponse.content;
   console.log("[debate] Round 1 complete — Architect plan ready");
 
@@ -109,7 +111,7 @@ Using this refined plan as your blueprint, generate the complete, fully working 
 
 ${outputFormat}`;
 
-  const coderResponse = await codingModel.invoke(coderPrompt);
+  const coderResponse = await coderModel.invoke(coderPrompt);
   console.log("[debate] Round 3 complete — Final code generated");
 
   return {
