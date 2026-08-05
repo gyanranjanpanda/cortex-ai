@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useSelector }       from "react-redux";
 import Editor                from "@monaco-editor/react";
+import JSZip                 from "jszip";
 import { FiCode }            from "react-icons/fi";
 import { detectLanguage }    from "../utils/detectLanguage";
 import {
@@ -108,24 +109,22 @@ function buildSrcDoc(htmlFile, cssFile, jsFile) {
 
 async function downloadZip(files, title) {
   try {
-    if (!window.JSZip) {
-      await new Promise((res, rej) => {
-        const s = document.createElement("script");
-        s.src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";
-        s.onload = res; s.onerror = rej;
-        document.head.appendChild(s);
-      });
-    }
-    const zip  = new window.JSZip();
+    const zip = new JSZip();
     files.forEach(f => zip.file(f.name, f.content));
     const blob = await zip.generateAsync({ type: "blob" });
     const url  = URL.createObjectURL(blob);
     const a    = Object.assign(document.createElement("a"), {
-      href: url, download: `${title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.zip`,
+      href: url,
+      download: `${title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.zip`,
     });
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
-  } catch (e) { console.error("ZIP failed:", e); }
+  } catch (e) {
+    console.error("ZIP failed:", e);
+    alert("Download failed: " + e.message);
+  }
 }
 
 const TYPE_META = {
