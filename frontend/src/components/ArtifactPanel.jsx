@@ -195,8 +195,12 @@ function ContainerPreview({ artifact, pType, onDownload }) {
     setStatus("building"); setLogs("⚡ Starting container...\n"); setSession(null);
     try {
       const res  = await fetch(`${API_BASE}/api/preview/start`, { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include", body: JSON.stringify({ artifact }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed");
+      // Read as text first — server may return HTML on error (not JSON)
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); }
+      catch { throw new Error("Server is not ready for container previews. Download the ZIP to run locally."); }
+      if (!res.ok) throw new Error(data.message || "Failed to start preview");
       setSession(data.session);
       setLogs(p => p + `📦 ${data.session.stack} container started\n`);
 
@@ -280,11 +284,42 @@ function ContainerPreview({ artifact, pType, onDownload }) {
           )}
           {(isLoading || status === "error" || status === "stopped") && (
             <div className="flex flex-col flex-1 overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.06] shrink-0">
-                <Terminal size={12} className="text-slate-500" />
-                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Build Logs</span>
-              </div>
-              <pre ref={logsRef} className="flex-1 overflow-y-auto p-4 text-[11px] text-slate-300 font-mono leading-relaxed" style={{scrollbarWidth:"thin"}}>{logs}</pre>
+              {/* Error state: friendly download fallback */}
+              {status === "error" && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                    <Terminal size={20} className="text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-slate-200 font-medium text-sm mb-1">Container preview unavailable</p>
+                    <p className="text-slate-500 text-xs leading-relaxed max-w-xs mb-3">
+                      Live container previews require Docker on the server.<br/>
+                      Download the ZIP and run locally:
+                    </p>
+                    <code className="block text-[10px] text-emerald-400/80 bg-emerald-500/5 border border-emerald-500/10 rounded-lg px-3 py-2 text-left">
+                      {RUN_HINT[pType] || "See README.md"}
+                    </code>
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={onDownload} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium border-none cursor-pointer transition-colors">
+                      <Download size={13} /> Download ZIP
+                    </button>
+                    <button onClick={launch} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs border-none cursor-pointer transition-colors">
+                      <RefreshCw size={11} /> Retry
+                    </button>
+                  </div>
+                </div>
+              )}
+              {/* Loading / stopped: show logs */}
+              {(isLoading || status === "stopped") && (
+                <>
+                  <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.06] shrink-0">
+                    <Terminal size={12} className="text-slate-500" />
+                    <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Build Logs</span>
+                  </div>
+                  <pre ref={logsRef} className="flex-1 overflow-y-auto p-4 text-[11px] text-slate-300 font-mono leading-relaxed" style={{scrollbarWidth:"thin"}}>{logs}</pre>
+                </>
+              )}
             </div>
           )}
         </div>
@@ -358,7 +393,10 @@ export default function ArtifactPanel() {
   const hasReactJsx    = pType === "react" || files.some(f => f.name.match(/\.(jsx|tsx)$/));
   const hasVue         = pType === "vue"   || files.some(f => f.name.endsWith(".vue"));
   const browserNative  = hasHtml || hasReactJsx || hasVue;
-  const needsContainer = ["python","node","go","rust","java","fullstack"].includes(pType) && !hasHtml;
+  // Only show container launcher if there is truly NO previewable browser file.
+  // This prevents Python/etc projectType from showing Docker UI when the LLM
+  // actually generated an index.html (e.g. angry bird game mislabelled as python).
+  const needsContainer = !browserNative && ["python","node","go","rust","java","fullstack"].includes(pType);
 
   const srcdoc = useMemo(() => {
     if (hasHtml)     return buildHtmlDoc(resolved.htmlFile, resolved.cssFile, resolved.jsFile);
