@@ -1,15 +1,47 @@
 import { checkAgentLimit } from "../config/agentRateLimit.js";
-import { deductCredits } from "../utils/deductCredits.js";
-import { getModel } from "../utils/model.js";
-import { debateAndCode } from "../utils/modelDebate.js";
+import { deductCredits }   from "../utils/deductCredits.js";
+import { getModel }        from "../utils/model.js";
 
+// ─── Content Extraction ───────────────────────────────────────────────────────
+// Strips markdown prose LLMs add before/after code blocks in FILE: sections.
+
+function extractFileContent(raw = "", filename = "") {
+  let code = raw
+    .replace(/```[\w.-]*\n?/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  const ext = filename.split(".").pop()?.toLowerCase();
+
+  if (ext === "html") {
+    const start = code.search(/<(!DOCTYPE|html|head|body)/i);
+    if (start > 0) code = code.slice(start);
+    const end = code.lastIndexOf("</html>");
+    if (end !== -1) code = code.slice(0, end + 7);
+  } else if (ext === "css") {
+    const start = code.search(/^([*]|:|@|[.#a-zA-Z])/m);
+    if (start > 0) code = code.slice(start);
+  } else if (["js", "ts", "jsx", "tsx", "mjs"].includes(ext)) {
+    const start = code.search(/^(var |let |const |function |class |import |export |\/\/|\/\*|\(|async |await )/m);
+    if (start > 0) code = code.slice(start);
+  } else if (["py", "rb", "go", "rs", "java", "kt", "swift"].includes(ext)) {
+    // Strip prose lines at top for server-side languages
+    const lines = code.split("\n");
+    const codeStart = lines.findIndex(l =>
+      /^(import |from |def |class |#|\/\/|package |use |pub |fn |func |@|if |for |while |const |let |var |async )/.test(l.trim())
+    );
+    if (codeStart > 0) code = lines.slice(codeStart).join("\n");
+  }
+
+  return code.trim();
+}
+
+// ─── Agent ────────────────────────────────────────────────────────────────────
 
 export const codingAgent = async (state) => {
 
   await checkAgentLimit(state.userId, "coding");
 
-  // Try to deduct credits. If insufficient, fall back to free Groq mode
-  // instead of blocking the user entirely.
   let useFreeMode = false;
   try {
     await deductCredits(state.userId, "coding");
@@ -18,350 +50,227 @@ export const codingAgent = async (state) => {
       console.warn("[coding-agent] Insufficient credits — switching to free Groq mode");
       useFreeMode = true;
     } else {
-      throw creditErr; // rethrow unrelated errors
+      throw creditErr;
     }
   }
 
-function extractFileContent(raw = "", filename = "") {
-  // 1. Strip code fence markers
-  let code = raw
-    .replace(/```[\w-]*\n?/g, "")
-    .replace(/```/g, "")
-    .trim();
+  const llm = getModel("coding");
 
-  const ext = filename.split(".").pop()?.toLowerCase();
+  const response = await llm.invoke(`You are CortexAI — an elite full-stack AI engineer.
+You generate production-quality code in ANY language or framework, including full-stack projects.
 
-  if (ext === "html") {
-    // Extract from the first < to end of </html> — strip any prose before/after
-    const htmlStart = code.search(/<(!DOCTYPE|html|head|body)/i);
-    if (htmlStart > 0) code = code.slice(htmlStart);
-    const htmlEnd = code.lastIndexOf("</html>");
-    if (htmlEnd !== -1) code = code.slice(0, htmlEnd + 7);
-  } else if (ext === "css") {
-    // Strip prose lines at top — CSS starts with a selector, @import, :root, or *
-    const cssStart = code.search(/^([*]|:|@|[.#a-zA-Z])/m);
-    if (cssStart > 0) code = code.slice(cssStart);
-  } else if (ext === "js") {
-    // Strip prose lines at top — JS starts with a keyword, var/let/const, or comment
-    const jsStart = code.search(/^(var |let |const |function |class |import |export |document|window|\/\/|\/\*|\()/m);
-    if (jsStart > 0) code = code.slice(jsStart);
-  }
-
-  return code.trim();
-}
-
-
-  const llm =
-    getModel("coding");
-
- const response = await llm.invoke(`You are CortexAI Coding Agent.
-
-Your first task is to identify the user's intent.
-
-=========================
+══════════════════════════════════════
 INTENT DETECTION
-=========================
+══════════════════════════════════════
 
-Classify the request into ONE of these:
+First classify the request:
 
-1. CODE_GENERATION
-2. CODE_REVIEW
-3. CODE_EXPLANATION
-4. DEBUGGING
-5. OPTIMIZATION
-6. CONVERSION
-7. DOCUMENTATION
+CODE_GENERATION  → user wants you to build something
+CODE_REVIEW      → user shares code and asks for feedback
+CODE_EXPLANATION → user wants code explained
+DEBUGGING        → user asks to fix a bug
+OPTIMIZATION     → user asks to improve performance
 
-=========================
-CODE REVIEW
-=========================
+For CODE_REVIEW / CODE_EXPLANATION / DEBUGGING / OPTIMIZATION:
+Return Markdown ONLY. Do NOT generate project files.
+Structure: # Overview | ## Issues | ## Fixes | ## Improved Code
 
-If the user provides code and asks:
+══════════════════════════════════════
+TECH STACK DETECTION (CODE_GENERATION)
+══════════════════════════════════════
 
-- review
-- explain
-- optimize
-- debug
-- find bugs
-- improve
-- refactor
+Detect the best stack from the user's request:
 
-DO NOT generate a new project.
+| User says                      | Stack                                          |
+|-------------------------------|------------------------------------------------|
+| "HTML / CSS / JS / website"   | Vanilla HTML + CSS + JS (3 files)              |
+| "React app / component"       | React (Vite) — src/App.jsx, src/main.jsx, etc. |
+| "Next.js"                     | Next.js 14 app router structure                |
+| "Vue / Angular / Svelte"      | That framework's project structure             |
+| "Node.js / Express API"       | Node.js + Express — index.js, routes/, etc.    |
+| "Python / Flask / FastAPI"    | Python — app.py / main.py + requirements.txt  |
+| "Django"                      | Django project structure                       |
+| "full-stack"                  | Frontend folder + backend folder               |
+| "game / canvas / animation"   | Single self-contained index.html               |
+| "CLI / script"                | Single file in the appropriate language        |
+| No framework mentioned        | Vanilla HTML + CSS + JS                        |
 
-Instead return Markdown only.
+══════════════════════════════════════
+FILE STRUCTURE RULES
+══════════════════════════════════════
 
-Include:
+Use nested paths when needed:
 
-# Overview
+FILE: package.json
+FILE: src/App.jsx
+FILE: src/components/Navbar.jsx
+FILE: src/pages/Home.jsx
+FILE: backend/index.js
+FILE: backend/routes/api.js
+FILE: requirements.txt
+FILE: app.py
 
-## What this code does
+RULES:
+- Always include a package.json (with scripts) for Node/React/Next projects
+- Always include requirements.txt for Python projects
+- Always include README.md for full-stack projects
+- For React/Next: include all necessary config files (vite.config.js, tailwind.config.js, etc.)
+- For backend APIs: include working routes, middleware, and error handling
+- NEVER generate placeholder functions — every function must be fully implemented
 
-## Problems
+══════════════════════════════════════
+DESIGN & UI MANDATE (frontend projects)
+══════════════════════════════════════
 
-## Improvements
+- Dark theme by default: background #090d16 / #0f1117
+- Accent gradients: linear-gradient(135deg, #6366f1, #8b5cf6)
+- Typography: @import Inter from Google Fonts, apply globally
+- Glassmorphism cards: background rgba(255,255,255,0.03); backdrop-filter blur(16px); border 1px solid rgba(255,255,255,0.08)
+- CSS variables for all design tokens
+- Smooth transitions: cubic-bezier(0.4, 0, 0.2, 1) 0.3s
+- Responsive: mobile-first, flexbox/grid layouts
+- Real Unsplash images (never placeholder)
+- Every UI project must look like a $100,000 product
 
-## Best Practices
+══════════════════════════════════════
+SECTION MAPPING (websites)
+══════════════════════════════════════
 
-## Optimized snippets (if required)
+NEVER use generic Home/About/Services sections.
+Match sections to EXACTLY what the user asked for:
 
-For explanations:
+- e-commerce   → Hero, Product Grid, Cart Sidebar, Filters, Product Modal, Checkout CTA, Footer
+- portfolio    → Hero, About, Skills, Projects Grid, Testimonials, Contact Form, Footer
+- dashboard    → Sidebar Nav, KPI Cards, Charts, Data Tables, Recent Activity Feed
+- SaaS landing → Hero, Features, How It Works, Pricing Cards, FAQ Accordion, CTA, Footer
+- blog         → Featured Post, Post Grid, Categories Sidebar, Newsletter, Footer
+- restaurant   → Hero, Menu Tabs, Gallery Masonry, Reservations Form, Location Map, Footer
+- Other        → Derive the most logical domain-specific sections
 
-- Never wrap variable names in triple backticks.
-- Use single backticks only for inline code.
-- Use triple backticks ONLY for complete code blocks.
-
-
-=========================
-CODE GENERATION
-=========================
-
-Default stack:
-
-HTML
-CSS
-JavaScript
-
-Do NOT use any framework unless explicitly requested.
-
-Examples:
-
-"Build portfolio"
-→ HTML CSS JS
-
-"Create ecommerce"
-→ HTML CSS JS
-
-"Create dashboard"
-→ HTML CSS JS
-
-"React dashboard"
-→ React
-
-"Next.js blog"
-→ Next.js
-
-=========================
-WEBSITE RULE
-=========================
-
-Build a SINGLE PAGE website unless the user explicitly requests multiple pages.
-
-CRITICAL: Sections MUST be determined by the user's actual request.
-
-- "e-commerce" → Hero, Products Grid, Cart Sidebar, Filters, Product Modal, Checkout CTA, Footer
-- "portfolio" → Hero, About, Skills, Projects, Testimonials, Contact, Footer  
-- "dashboard" → Sidebar Nav, Stats Cards, Charts, Data Tables, Activity Feed
-- "landing page" → Hero, Features, Pricing, CTA, Footer
-- "blog" → Hero, Post Grid, Categories, Featured Post, Newsletter, Footer
-- "restaurant" → Hero, Menu, Gallery, Reservations, Location, Footer
-- "SaaS" → Hero, Features, How It Works, Pricing, FAQ, Footer
-- For ANY other request: derive the most logical sections from the user's specific domain
-
-DO NOT default to generic Home/About/Services/Contact for every request.
-Match the sections to the EXACT type of site the user asked for.
-
-Navigation should smoothly scroll to each section.
-
-=========================
-PROJECT FILES
-=========================
-
-For default websites generate only:
-
-FILE: index.html
-
-FILE: style.css
-
-FILE: script.js
-
-Generate extra files ONLY if necessary.
-
-=========================
-DESIGN & UI EXCELLENCE MANDATE
-=========================
-
-- Create stunning, high-end, visual WOW-factor interfaces.
-- USE DARK THEME BY DEFAULT with sleek dark background (#090d16 / #111827) and curated neon/pastel accent gradients (e.g. linear-gradient(135deg, #6366f1, #8b5cf6)).
-- ALWAYS IMPORT modern typography: \`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');\` and apply \`font-family: 'Inter', sans-serif;\`.
-- Use Glassmorphism: \`background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); shadow: 0 10px 30px rgba(0,0,0,0.5);\`.
-- Use rich CSS variables for colors, spacing, and border-radii.
-- Add interactive hover effects, smooth transitions (\`transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1)\`), and dynamic canvas/UI layout.
-- Spacing must be generous (padding: 2rem+), responsive, and look like a $100,000 product dashboard/website.
-
-=========================
-IMAGES
-=========================
-
-Always use real Unsplash images.
-
-Never use placeholders.
-
-=========================
-GAMES & INTERACTIVE APPS
-=========================
-
-When the user asks for a GAME (pac-man, snake, tetris, chess, etc.):
-
-- Put ALL code in a SINGLE self-contained FILE: index.html
-- Include inline <style> and inline <script> — do NOT split into separate files
-- Implement COMPLETE game logic — maze layout, movement, collision detection, score tracking, lives, win/lose states, keyboard controls
-- Games MUST be fully playable — arrow keys for movement, spacebar for pause, etc.
-- Include a scoreboard / HUD displaying score, level, and lives
-- Use requestAnimationFrame for smooth animation loops
-- Canvas games: draw everything procedurally (maze walls, pellets, sprites) — do NOT use image files
-- Style the page with a dark background so the canvas is clearly visible
-- IMPORTANT: Start drawing to the canvas IMMEDIATELY in window.onload or DOMContentLoaded — NEVER wait for a keypress before rendering. Draw the initial game state (maze, player, ghosts) right away.
-- Show a "Press Arrow Key to Play" text overlay ON the canvas itself (drawn with fillText), NOT as a blocker that prevents rendering.
-- Attach keyboard listeners to BOTH the canvas element AND document so arrow keys work even without clicking the canvas first: document.addEventListener('keydown', handler) AND canvas.addEventListener('keydown', handler)
-- Call canvas.focus() immediately after getting the canvas reference so it receives input without user clicking.
-
-
-=========================
+══════════════════════════════════════
 JAVASCRIPT — DYNAMIC BEHAVIOUR
-=========================
+══════════════════════════════════════
 
-For ALL websites:
+For ALL vanilla HTML/JS projects:
 - Wrap ALL JS in DOMContentLoaded
-- Every button, input, and interactive element MUST have a working addEventListener
-- State MUST be managed as a single state object: let state = { ... }
-- Use dynamic DOM updates — never reload the page for actions
-- Implement real functionality: working cart, working filters, working modals, real form validation
-- Use fetch() or mock data arrays for dynamic content rendering
-- Add smooth CSS transitions and micro-animations on all interactions
+- Manage state as a single state object: let state = { ... }
+- Working event listeners on EVERY interactive element
+- Real functionality: working cart, filters, modals, form validation
+- Dynamic DOM rendering from data arrays (no static placeholder text)
+- Micro-animations on all interactions
 
-For games: Write complete, fully functional game code with no shortcuts.
+For GAMES:
+- Single FILE: index.html with inline <style> and <script>
+- Complete game logic: collision, scoring, lives, win/lose
+- requestAnimationFrame render loop
+- Start rendering canvas IMMEDIATELY — never wait for keypress
+- Keyboard listeners on BOTH document AND canvas
+- call canvas.focus() on load
 
-=========================
-OUTPUT
-=========================
+For React/Next:
+- useState + useEffect for all state
+- Proper component decomposition
+- Working API calls (use mock data if no backend)
 
-If intent is CODE_GENERATION
+For Node/Express/FastAPI:
+- Proper middleware setup (cors, json parsing, error handling)
+- Working route handlers with real logic
+- Environment variable config (.env.example)
 
-Return ONLY:
+══════════════════════════════════════
+OUTPUT FORMAT
+══════════════════════════════════════
 
-FILE: index.html
+For CODE_GENERATION — output ONLY this format, nothing else:
 
-...
+FILE: path/to/filename.ext
+[complete file content here]
 
-FILE: style.css
+FILE: path/to/another/file.ext
+[complete file content here]
 
-...
-
-FILE: script.js
-
-...
-
-No markdown.
-
-No explanation.
-
-If intent is REVIEW / EXPLAIN / DEBUG
-
-Return Markdown only.
-
-Do NOT generate project files.
-
-=========================
-TOKEN BUDGET
-=========================
-
-Generate complete, fully working code — do NOT truncate.
+RULES:
+- Start your response with "FILE:" — no introduction, no explanation
+- NEVER truncate — generate 100% complete, working code
+- No markdown, no backticks around FILE blocks, no commentary
+- Every file must be complete and functional on its own
 
 User Request:
 
 ${state.prompt}`);
 
-  // ── Use the first DeepSeek response directly ────────────────────────────────
-  // The initial call has ALL context: game rules, design rules, dynamic JS mandate.
-  // Re-running debate strips that context and produces skeleton code.
-  const rawContent    = response.content || "";
-  const hasFileMarkers = rawContent.includes("FILE:");
-  const isHtmlDirect   = /<!DOCTYPE|<html/i.test(rawContent);
-  const looksLikeCode  = hasFileMarkers || isHtmlDirect;
+  // ── Parse response ──────────────────────────────────────────────────────────
+  const rawContent = response.content || "";
 
-  let finalResponse = response;
-
-  // Free mode: Groq generates directly (insufficient credits path)
-  if (looksLikeCode && useFreeMode) {
-
-    // ── Free Mode: direct generation (no debate, no credit cost) ─────────────
-    console.log("[coding-agent] Free mode — generating with Groq directly");
+  // Free mode override: re-generate with Groq
+  let finalContent = rawContent;
+  if (useFreeMode && (rawContent.includes("FILE:") || /<!DOCTYPE|<html/i.test(rawContent))) {
+    console.log("[coding-agent] Free mode — re-generating with Groq");
     const groq = getModel("chat");
-    const groqResponse = await groq.invoke(
-      `You are an expert coder. Generate complete, fully working code for: "${state.prompt}"\n\nReturn code using FILE: index.html / FILE: style.css / FILE: script.js format.`
+    const groqRes = await groq.invoke(
+      `You are an expert coder. Generate complete working code for: "${state.prompt}"\n\nOutput format — start with FILE: immediately:\nFILE: filename.ext\n[code]\n\nNo explanation, no markdown.`
     );
-    finalResponse = { content: groqResponse.content };
+    finalContent = groqRes.content || rawContent;
   }
 
+  const content = finalContent.trim();
 
-  const content = finalResponse.content?.trim();
+  // ── Detect if this is a code response or a chat response ───────────────────
+  const hasFileMarkers = content.includes("FILE:");
+  const isRawHtml      = /^<!DOCTYPE|^<html/i.test(content);
 
+  if (!hasFileMarkers && !isRawHtml) {
+    // Chat-style response (review, explanation, debug)
+    return { ...state, response: content, artifacts: [] };
+  }
 
+  // ── Extract files ───────────────────────────────────────────────────────────
   const files = [];
 
-  const matches = [
-    ...content.matchAll(
-      /FILE:\s*([^\n]+)\n([\s\S]*?)(?=\nFILE:\s*[^\n]+\n|$)/g
-    )
-  ];
-
-  if (matches.length) {
+  if (isRawHtml && !hasFileMarkers) {
+    files.push({ name: "index.html", content: extractFileContent(content, "index.html") });
+  } else {
+    const matches = [
+      ...content.matchAll(/FILE:\s*([^\n]+)\n([\s\S]*?)(?=\nFILE:\s*[^\n]+\n|$)/g)
+    ];
 
     matches.forEach(match => {
-      // Strip markdown formatting characters that LLMs sometimes add to filenames
-      // e.g. "index.html**" → "index.html", "**style.css**" → "style.css"
       const rawName = match[1].trim().replace(/[*`_]/g, "").trim();
+      if (!rawName) return;
       files.push({
         name:    rawName,
         content: extractFileContent(match[2], rawName),
       });
     });
-
-  } else if (!content.includes("FILE:")) {
-
-    // Check if the raw content looks like HTML — if so treat it as index.html
-    const isHtml = /<(!DOCTYPE|html|head|body)/i.test(content);
-    const prompt = state.prompt.toLowerCase();
-
-    if (isHtml) {
-      files.push({ name: "index.html", content: cleanCode(content) });
-    } else {
-      // Not a multi-file response — return as plain markdown answer
-      return {
-        ...state,
-        response: content,
-        artifacts: []
-      };
-    }
   }
 
   if (!files.length) {
-    return {
-      ...state,
-      response: content,
-      artifacts: []
-    };
+    return { ...state, response: content, artifacts: [] };
   }
 
+  // ── Detect project type for frontend display ────────────────────────────────
+  const hasHtml    = files.some(f => f.name.endsWith(".html"));
+  const hasReact   = files.some(f => f.name.match(/\.(jsx|tsx)$/));
+  const hasPython  = files.some(f => f.name.endsWith(".py"));
+  const hasNode    = files.some(f => f.name === "package.json");
+  const isFullStack = files.some(f => f.name.startsWith("backend/") || f.name.startsWith("server/") || f.name.startsWith("api/"));
+
+  let projectType = "html";
+  if (isFullStack)   projectType = "fullstack";
+  else if (hasReact) projectType = "react";
+  else if (hasPython) projectType = "python";
+  else if (hasNode && !hasHtml) projectType = "node";
 
   return {
-
     ...state,
-
-    response:
-      "Code generated successfully.",
-
-    artifacts:[
-      {
-        id:Date.now(),
-        type:"project",
-        title:state.prompt,
-        files,
-        createdAt:
-          new Date().toISOString()
-      }
-    ]
-
+    response: "Code generated successfully.",
+    artifacts: [{
+      id:          Date.now(),
+      type:        "project",
+      projectType,
+      title:       state.prompt,
+      files,
+      createdAt:   new Date().toISOString(),
+    }],
   };
-
 };
