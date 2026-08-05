@@ -36,6 +36,7 @@ import { pptAgent } from "../agents/ppt.agent.js";
 import { imageAgent } from "../agents/imageGen.agent.js";
 import { visionAgent } from "../agents/vision.agent.js";
 import { pdfRagAgent } from "../agents/pdfRag.agent.js";
+import { authorizeToolNode, outputValidationNode } from "../security/nodes.js";
 
 const workflow =
 new StateGraph(
@@ -46,6 +47,8 @@ workflow.addNode(
  "router",
  routerNode
 );
+workflow.addNode("authorize_tool", authorizeToolNode);
+workflow.addNode("validate_output", outputValidationNode);
 
 workflow.addNode(
  "chat",
@@ -86,10 +89,11 @@ workflow.addEdge(
  "__start__",
  "router"
 );
+workflow.addEdge("router", "authorize_tool");
 
 workflow.addConditionalEdges(
 
- "router",
+ "authorize_tool",
 
  (state)=>{
 
@@ -142,11 +146,11 @@ workflow.addConditionalEdges(
 
 workflow.addEdge(
   "coding",
-  "__end__"
+  "validate_output"
 );
 workflow.addEdge(
   "image",
-  "__end__"
+  "validate_output"
 );
 
 workflow.addEdge(
@@ -156,27 +160,28 @@ workflow.addEdge(
 
 workflow.addEdge(
   "pdf",
-  "__end__"
+  "validate_output"
 );
 workflow.addEdge(
   "ppt",
-  "__end__"
+  "validate_output"
 );
 
 workflow.addEdge(
   "chat",
-  "__end__"
+  "validate_output"
 );
 
 workflow.addEdge(
     "vision",
-    "__end__"
+    "validate_output"
 );
 
 workflow.addEdge(
     "pdf_rag",
-    "__end__"
+    "validate_output"
 );
+workflow.addEdge("validate_output", "__end__");
 
 export const graph =
 workflow.compile();

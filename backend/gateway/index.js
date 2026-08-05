@@ -9,6 +9,9 @@ import { proxyWithUser } from "./utils/proxyWithHeaders.js";
 import { protect } from "./middlewares/auth.middleware.js";
 import { getCurrentUser } from "./controllers/user.controller.js";
 import cookieParser from "cookie-parser"
+import { rateLimit } from "express-rate-limit";
+import { RedisStore } from "rate-limit-redis";
+import { inspectJsonPrompt } from "./middlewares/security.middleware.js";
 dotenv.config();
 const app = express();
 const port=process.env.PORT || 5000
@@ -34,11 +37,23 @@ app.use(
 );
 app.use(morgan("dev"));
 app.use(cookieParser());
+app.use(helmet());
 app.use("/api/auth", proxy(process.env.AUTH_SERVICE));
 app.use(express.json());
 app.use("/api/me", protect, getCurrentUser);
 app.use("/api/chat",protect,proxyWithUser(process.env.CHAT_SERVICE))
-app.use("/api/agent",protect,proxyWithUser(process.env.AGENT_SERVICE))
+const agentRateLimit = rateLimit({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.GATEWAY_AGENT_RATE_LIMIT || 30),
+  standardHeaders: "draft-8",
+  legacyHeaders: false,
+  store: new RedisStore({
+    prefix: "gateway:agent-rate:",
+    sendCommand: (...args) => redis.call(...args),
+  }),
+  message: { success: false, code: "RATE_LIMITED", message: "Too many agent requests. Please try again shortly." },
+});
+app.use("/api/agent", protect, agentRateLimit, inspectJsonPrompt, proxyWithUser(process.env.AGENT_SERVICE))
 app.use("/api/billing",protect,proxyWithUser(process.env.BILLING_SERVICE))
 
 

@@ -1,4 +1,5 @@
 import proxy from "express-http-proxy";
+import crypto from "crypto";
 
 export const proxyWithUser =
 (serviceUrl)=>{
@@ -25,6 +26,12 @@ export const proxyWithUser =
        "x-user-avatar"
       ] =
       srcReq.user.avatar
+
+      proxyReqOpts.headers["x-tenant-id"] = srcReq.user.tenantId || srcReq.user.orgId || "default";
+      proxyReqOpts.headers["x-trace-id"] = srcReq.headers["x-trace-id"] || crypto.randomUUID();
+      if (srcReq.headers["x-approval-id"]) {
+        proxyReqOpts.headers["x-approval-id"] = srcReq.headers["x-approval-id"];
+      }
 
     }
 

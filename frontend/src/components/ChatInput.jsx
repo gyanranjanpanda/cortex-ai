@@ -223,7 +223,12 @@ if(selectedFile){
 
 setSelectedFile(null)
 
-      const data = await sendPrompt(formData);
+      const modality = selectedAgent === "image"
+        ? "image"
+        : (selectedAgent === "pdf" && selectedFile)
+          ? "rag"
+          : "chat";
+      const data = await sendPrompt(formData, modality);
     console.log(data)
      dispatch(
   addMessage({

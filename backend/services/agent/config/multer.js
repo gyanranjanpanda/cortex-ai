@@ -1,6 +1,7 @@
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import crypto from "crypto";
 
 const uploadDir = path.resolve("./temp");
 
@@ -28,7 +29,7 @@ const storage = multer.diskStorage({
 
             null,
 
-            `${Date.now()}-${file.originalname}`
+        `${crypto.randomUUID()}${file.mimetype === "application/pdf" ? ".pdf" : ".image"}`
 
         );
 

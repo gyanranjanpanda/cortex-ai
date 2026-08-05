@@ -9,7 +9,40 @@ Annotation.Root({
  conversationId:
  Annotation(),
 
- userId:
+  userId:
+ Annotation(),
+
+ tenantId:
+ Annotation(),
+
+ traceId:
+ Annotation(),
+
+ approvalId:
+ Annotation(),
+
+ requestPolicy:
+ Annotation(),
+
+ proposedTool:
+ Annotation(),
+
+ policyDecision:
+ Annotation(),
+
+ modality:
+ Annotation(),
+
+ classifierSignals:
+ Annotation(),
+
+ budgetReservation:
+ Annotation(),
+
+ toolArgs:
+ Annotation(),
+
+ resource:
  Annotation(),
 
  agent:

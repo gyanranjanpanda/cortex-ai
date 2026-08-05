@@ -1,6 +1,7 @@
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
 import { searchTool } from "../utils/tavily.js";
+import { sanitizeUntrustedText } from "../security/inputSecurity.js";
 
 
 
@@ -26,14 +27,12 @@ await checkAgentLimit(
 
 } );
 
-console.log(results)
-
   return {
 
    ...state,
 
    searchResults:
-   results,
+   sanitizeUntrustedText(JSON.stringify(results)),
    
 
   };
