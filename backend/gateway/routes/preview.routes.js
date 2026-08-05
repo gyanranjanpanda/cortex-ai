@@ -80,11 +80,11 @@ router.delete("/:id", async (req, res) => {
 });
 
 /**
- * ALL /api/preview/:id/proxy/*
+ * ALL /api/preview/:id/proxy  (and any sub-path)
  * Transparent HTTP proxy to the running container.
- * Strips the /api/preview/:id/proxy prefix before forwarding.
+ * Uses router.use so the full path is preserved without needing a named wildcard.
  */
-router.all("/:id/proxy/*", (req, res) => {
+router.use("/:id/proxy", (req, res) => {
   loadPreviewManager().then(pm => {
     pm.proxySessionRequest(req, res);
   }).catch(err => {
