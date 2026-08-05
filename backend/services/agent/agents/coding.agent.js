@@ -271,42 +271,19 @@ User Request:
 
 ${state.prompt}`);
 
-  // ── All code generation goes through the 3-round debate pipeline ───────────
-  // DeepSeek classifies AND generates — skip redundant intent regex check.
-  // Instead: if the raw response contains FILE: markers, it's code generation.
-  // If it looks like markdown explanation, return it as chat.
-  const rawContent = response.content || "";
+  // ── Use the first DeepSeek response directly ────────────────────────────────
+  // The initial call has ALL context: game rules, design rules, dynamic JS mandate.
+  // Re-running debate strips that context and produces skeleton code.
+  const rawContent    = response.content || "";
   const hasFileMarkers = rawContent.includes("FILE:");
   const isHtmlDirect   = /<!DOCTYPE|<html/i.test(rawContent);
   const looksLikeCode  = hasFileMarkers || isHtmlDirect;
 
   let finalResponse = response;
 
-  if (looksLikeCode && !useFreeMode) {
-    // ── Premium Mode: 3-round debate re-generates with full plan ─────────────
-    console.log("[coding-agent] Routing to 3-round DeepSeek debate pipeline");
-    const outputFormat = `
-Return ONLY the code files in this exact format (no markdown, no explanation):
+  // Free mode: Groq generates directly (insufficient credits path)
+  if (looksLikeCode && useFreeMode) {
 
-FILE: index.html
-...
-
-FILE: style.css
-...
-
-FILE: script.js
-...
-
-For GAMES: put everything in a single FILE: index.html with inline <style> and <script>.
-Generate complete, fully working code — no placeholders, no truncation.
-All JavaScript MUST be wrapped in DOMContentLoaded.
-All interactive elements MUST have working event listeners.
-`;
-    const debateResult = await debateAndCode(state.prompt, outputFormat);
-    finalResponse = { content: debateResult.finalCode };
-    console.log("[coding-agent] Debate complete — final code ready");
-
-  } else if (looksLikeCode && useFreeMode) {
     // ── Free Mode: direct generation (no debate, no credit cost) ─────────────
     console.log("[coding-agent] Free mode — generating with Groq directly");
     const groq = getModel("chat");
