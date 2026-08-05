@@ -14,9 +14,9 @@ import { getModel } from "./model.js";
  * not just games. The output format is passed in by the caller.
  */
 export async function debateAndCode(userPrompt, outputFormat) {
-  const architectModel = getModel("chat");   // Groq LLaMA → Gemini fallback (fast planner)
-  const criticModel    = getModel("coding"); // Gemini → Groq fallback (deep reviewer)
-  const coderModel     = getModel("chat");   // Groq LLaMA → Gemini fallback (code output)
+  const architectModel = getModel("chat");    // Groq LLaMA — fast planner
+  const criticModel    = getModel("coding");  // DeepSeek — deep reviewer
+  const coderModel     = getModel("coding");  // DeepSeek — writes the final code
 
 
 

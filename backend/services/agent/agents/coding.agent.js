@@ -122,30 +122,23 @@ Examples:
 WEBSITE RULE
 =========================
 
-Unless the user explicitly requests multiple pages,
+Build a SINGLE PAGE website unless the user explicitly requests multiple pages.
 
-ALWAYS build a SINGLE PAGE website.
+CRITICAL: Sections MUST be determined by the user's actual request.
 
-Use sections:
+- "e-commerce" → Hero, Products Grid, Cart Sidebar, Filters, Product Modal, Checkout CTA, Footer
+- "portfolio" → Hero, About, Skills, Projects, Testimonials, Contact, Footer  
+- "dashboard" → Sidebar Nav, Stats Cards, Charts, Data Tables, Activity Feed
+- "landing page" → Hero, Features, Pricing, CTA, Footer
+- "blog" → Hero, Post Grid, Categories, Featured Post, Newsletter, Footer
+- "restaurant" → Hero, Menu, Gallery, Reservations, Location, Footer
+- "SaaS" → Hero, Features, How It Works, Pricing, FAQ, Footer
+- For ANY other request: derive the most logical sections from the user's specific domain
 
-Home
-About
-Services
-Features
-Pricing
-Testimonials
-Contact
-Footer
+DO NOT default to generic Home/About/Services/Contact for every request.
+Match the sections to the EXACT type of site the user asked for.
 
-Navigation should smoothly scroll.
-
-Do NOT generate:
-
-about.html
-contact.html
-pricing.html
-
-unless the user explicitly asks.
+Navigation should smoothly scroll to each section.
 
 =========================
 PROJECT FILES
@@ -202,10 +195,18 @@ When the user asks for a GAME (pac-man, snake, tetris, chess, etc.):
 
 
 =========================
-JAVASCRIPT
+JAVASCRIPT — DYNAMIC BEHAVIOUR
 =========================
 
-For websites: Keep JS minimal — only interactive logic, no unnecessary functions.
+For ALL websites:
+- Wrap ALL JS in DOMContentLoaded
+- Every button, input, and interactive element MUST have a working addEventListener
+- State MUST be managed as a single state object: let state = { ... }
+- Use dynamic DOM updates — never reload the page for actions
+- Implement real functionality: working cart, working filters, working modals, real form validation
+- Use fetch() or mock data arrays for dynamic content rendering
+- Add smooth CSS transitions and micro-animations on all interactions
+
 For games: Write complete, fully functional game code with no shortcuts.
 
 =========================
@@ -248,13 +249,20 @@ User Request:
 
 ${state.prompt}`);
 
-  // ── Detect intent from initial classification ─────────────────────────────
+  // ── All code generation goes through the 3-round debate pipeline ───────────
+  // DeepSeek classifies AND generates — skip redundant intent regex check.
+  // Instead: if the raw response contains FILE: markers, it's code generation.
+  // If it looks like markdown explanation, return it as chat.
   const rawContent = response.content || "";
-  const isCodeGen = /CODE_GENERATION/.test(rawContent);
+  const hasFileMarkers = rawContent.includes("FILE:");
+  const isHtmlDirect   = /<!DOCTYPE|<html/i.test(rawContent);
+  const looksLikeCode  = hasFileMarkers || isHtmlDirect;
 
   let finalResponse = response;
 
-  if (isCodeGen) {
+  if (looksLikeCode && !useFreeMode) {
+    // ── Premium Mode: 3-round debate re-generates with full plan ─────────────
+    console.log("[coding-agent] Routing to 3-round DeepSeek debate pipeline");
     const outputFormat = `
 Return ONLY the code files in this exact format (no markdown, no explanation):
 
@@ -269,23 +277,21 @@ FILE: script.js
 
 For GAMES: put everything in a single FILE: index.html with inline <style> and <script>.
 Generate complete, fully working code — no placeholders, no truncation.
+All JavaScript MUST be wrapped in DOMContentLoaded.
+All interactive elements MUST have working event listeners.
 `;
+    const debateResult = await debateAndCode(state.prompt, outputFormat);
+    finalResponse = { content: debateResult.finalCode };
+    console.log("[coding-agent] Debate complete — final code ready");
 
-    if (useFreeMode) {
-      // ── Free Mode: Groq direct generation (no debate, no credit cost) ──────
-      console.log("[coding-agent] Free mode — generating with Groq directly");
-      const groq = getModel("chat"); // Groq → Gemini fallback chain
-      const groqResponse = await groq.invoke(
-        `You are an expert coder. Generate complete, fully working code for: "${state.prompt}"\n\n${outputFormat}`
-      );
-      finalResponse = { content: groqResponse.content };
-    } else {
-      // ── Premium Mode: 3-round multi-agent debate ──────────────────────────
-      console.log("[coding-agent] CODE_GENERATION — starting 3-round debate pipeline");
-      const debateResult = await debateAndCode(state.prompt, outputFormat);
-      finalResponse = { content: debateResult.finalCode };
-      console.log("[coding-agent] Debate complete — final code ready");
-    }
+  } else if (looksLikeCode && useFreeMode) {
+    // ── Free Mode: direct generation (no debate, no credit cost) ─────────────
+    console.log("[coding-agent] Free mode — generating with Groq directly");
+    const groq = getModel("chat");
+    const groqResponse = await groq.invoke(
+      `You are an expert coder. Generate complete, fully working code for: "${state.prompt}"\n\nReturn code using FILE: index.html / FILE: style.css / FILE: script.js format.`
+    );
+    finalResponse = { content: groqResponse.content };
   }
 
 
