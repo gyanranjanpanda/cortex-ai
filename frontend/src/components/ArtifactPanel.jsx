@@ -19,9 +19,12 @@ export default function ArtifactPanel() {
   if (!artifact) return null;
 
   const file       = artifact?.files?.[activeFile];
-  const htmlFile   = artifact?.files?.find(f => f.name === "index.html");
-  const cssFile    = artifact?.files?.find(f => f.name === "style.css");
-  const jsFile     = artifact?.files?.find(f => f.name === "script.js");
+  // Normalize filenames: strip markdown chars and lowercase before matching
+  // Handles cases where LLM outputs "index.html**" or "**index.html**"
+  const normName   = (n = "") => n.replace(/[*`_]/g, "").trim().toLowerCase();
+  const htmlFile   = artifact?.files?.find(f => normName(f.name) === "index.html");
+  const cssFile    = artifact?.files?.find(f => normName(f.name) === "style.css");
+  const jsFile     = artifact?.files?.find(f => normName(f.name) === "script.js");
   const canPreview = Boolean(htmlFile);
 
   // Detect whether index.html is already a full HTML document

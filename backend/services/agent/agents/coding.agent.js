@@ -309,8 +309,11 @@ All interactive elements MUST have working event listeners.
   if (matches.length) {
 
     matches.forEach(match => {
+      // Strip markdown formatting characters that LLMs sometimes add to filenames
+      // e.g. "index.html**" → "index.html", "**style.css**" → "style.css"
+      const rawName = match[1].trim().replace(/[*`_]/g, "").trim();
       files.push({
-        name: match[1].trim(),
+        name: rawName,
         content: cleanCode(match[2]),
       });
     });
