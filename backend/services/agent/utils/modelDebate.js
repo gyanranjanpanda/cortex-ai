@@ -94,7 +94,15 @@ Be direct, specific, and technical.`;
   // ── Round 3: Coder ─────────────────────────────────────────────────────────
   console.log("[debate] Round 3 — Coder generating final code...");
 
-  const coderPrompt = `You are an expert software engineer.
+  const coderPrompt = `You are an expert software engineer outputting RAW CODE ONLY.
+
+ABSOLUTE RULES — NEVER VIOLATE:
+1. Output ZERO prose, ZERO explanation, ZERO markdown text
+2. Do NOT write "Here is the code", "Here's the implementation", or any sentence
+3. Do NOT add any text before the first FILE: marker
+4. Do NOT add any text after the last line of code
+5. Every file's content must be PURE CODE — no comments explaining what you did
+6. Start your response with "FILE:" immediately — nothing before it
 
 The user wants: "${userPrompt}"
 

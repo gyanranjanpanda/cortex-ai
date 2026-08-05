@@ -22,12 +22,34 @@ export const codingAgent = async (state) => {
     }
   }
 
-function cleanCode(code = "") {
-  return code
+function extractFileContent(raw = "", filename = "") {
+  // 1. Strip code fence markers
+  let code = raw
     .replace(/```[\w-]*\n?/g, "")
     .replace(/```/g, "")
     .trim();
+
+  const ext = filename.split(".").pop()?.toLowerCase();
+
+  if (ext === "html") {
+    // Extract from the first < to end of </html> — strip any prose before/after
+    const htmlStart = code.search(/<(!DOCTYPE|html|head|body)/i);
+    if (htmlStart > 0) code = code.slice(htmlStart);
+    const htmlEnd = code.lastIndexOf("</html>");
+    if (htmlEnd !== -1) code = code.slice(0, htmlEnd + 7);
+  } else if (ext === "css") {
+    // Strip prose lines at top — CSS starts with a selector, @import, :root, or *
+    const cssStart = code.search(/^([*]|:|@|[.#a-zA-Z])/m);
+    if (cssStart > 0) code = code.slice(cssStart);
+  } else if (ext === "js") {
+    // Strip prose lines at top — JS starts with a keyword, var/let/const, or comment
+    const jsStart = code.search(/^(var |let |const |function |class |import |export |document|window|\/\/|\/\*|\()/m);
+    if (jsStart > 0) code = code.slice(jsStart);
+  }
+
+  return code.trim();
 }
+
 
   const llm =
     getModel("coding");
@@ -313,8 +335,8 @@ All interactive elements MUST have working event listeners.
       // e.g. "index.html**" → "index.html", "**style.css**" → "style.css"
       const rawName = match[1].trim().replace(/[*`_]/g, "").trim();
       files.push({
-        name: rawName,
-        content: cleanCode(match[2]),
+        name:    rawName,
+        content: extractFileContent(match[2], rawName),
       });
     });
 
