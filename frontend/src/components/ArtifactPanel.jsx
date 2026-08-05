@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+// ─── Config ───────────────────────────────────────────────────────────────────
 
 const API_BASE = import.meta.env.VITE_GATEWAY_URL || "";
 
@@ -28,32 +28,23 @@ const TYPE_META = {
   fullstack: { label: "Full-Stack",  color: "#8b5cf6" },
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+const RUN_HINT = {
+  python:    "pip install -r requirements.txt && python app.py",
+  node:      "npm install && npm start",
+  react:     "npm install && npm run dev",
+  go:        "go run .",
+  rust:      "cargo run",
+  java:      "mvn spring-boot:run",
+  fullstack: "See README.md",
+};
 
-const normName = (n = "") => n.replace(/[*`_]/g, "").trim().toLowerCase();
+// ─── Pure helpers ─────────────────────────────────────────────────────────────
+
+const norm = (n = "") => n.replace(/[*`_]/g, "").trim().toLowerCase();
 
 function fileColor(name = "") {
   const ext = name.split(".").pop()?.toLowerCase();
-  return ({
-    html:"#e34c26", css:"#264de4", js:"#f7df1e", jsx:"#61dafb",
-    ts:"#3178c6", tsx:"#61dafb", py:"#3572A5", json:"#8bc34a",
-    go:"#00acd7", rs:"#dea584", java:"#b07219", md:"#aaa",
-    vue:"#42b883", svelte:"#ff3e00",
-  })[ext] || "#9e9e9e";
-}
-
-function resolveHtmlFiles(files = []) {
-  return {
-    htmlFile: files.find(f =>
-      normName(f.name) === "index.html" || normName(f.name).endsWith("/index.html")
-    ),
-    cssFile: files.find(f =>
-      normName(f.name).endsWith("style.css") || normName(f.name).endsWith("styles.css") || normName(f.name).endsWith("index.css")
-    ),
-    jsFile: files.find(f =>
-      ["script.js","main.js","app.js"].some(s => normName(f.name) === s || normName(f.name).endsWith("/"+s))
-    ),
-  };
+  return ({ html:"#e34c26",css:"#264de4",js:"#f7df1e",jsx:"#61dafb",ts:"#3178c6",tsx:"#61dafb",py:"#3572A5",json:"#8bc34a",go:"#00acd7",rs:"#dea584",java:"#b07219",vue:"#42b883",svelte:"#ff3e00",md:"#aaa" })[ext] || "#9e9e9e";
 }
 
 function buildTree(files = []) {
@@ -62,169 +53,99 @@ function buildTree(files = []) {
     const parts = f.name.split("/");
     let node = root;
     parts.forEach((part, i) => {
-      if (i === parts.length - 1) {
-        node[part] = { __file: true, idx, name: f.name };
-      } else {
-        if (!node[part] || node[part].__file) node[part] = {};
-        node = node[part];
-      }
+      if (i === parts.length - 1) { node[part] = { __file: true, idx, name: f.name }; }
+      else { if (!node[part] || node[part].__file) node[part] = {}; node = node[part]; }
     });
   });
   return root;
 }
 
-// ─── Browser-native preview builders ─────────────────────────────────────────
+function resolveHtmlFiles(files = []) {
+  const htmlFile = files.find(f => {
+    const n = norm(f.name);
+    return n === "index.html" || n.endsWith("/index.html") || n.endsWith(".html");
+  });
+  const cssFile = files.find(f => {
+    const n = norm(f.name);
+    return n.endsWith(".css");
+  });
+  const jsFile = files.find(f => {
+    const n = norm(f.name);
+    return n === "script.js" || n.endsWith("/script.js") || n === "main.js" || n.endsWith("/main.js") || n === "app.js";
+  });
+  return { htmlFile, cssFile, jsFile };
+}
 
-const GAME_BOOT = `<script>
+// ─── srcdoc builders ─────────────────────────────────────────────────────────
+
+const BOOT = `<script>
 (function(){
   var starters=['startGame','start','init','begin','play','initGame','runGame'];
   var flags=['gameStarted','started','running','isRunning','playing','isPlaying'];
-  var KEYS=[{key:'ArrowRight',keyCode:39},{key:'ArrowLeft',keyCode:37},
-            {key:'ArrowUp',keyCode:38},{key:'ArrowDown',keyCode:40},
-            {key:' ',keyCode:32},{key:'Enter',keyCode:13}];
+  var KEYS=[{key:'ArrowRight',kc:39},{key:'ArrowLeft',kc:37},{key:'ArrowUp',kc:38},{key:'ArrowDown',kc:40},{key:' ',kc:32},{key:'Enter',kc:13}];
   function go(){
     try{document.body.focus();}catch(e){}
     var c=document.querySelector('canvas');
     if(c){c.setAttribute('tabindex','0');c.focus();}
-    KEYS.forEach(function(k){
-      var d=new KeyboardEvent('keydown',{key:k.key,keyCode:k.keyCode,bubbles:true});
-      document.dispatchEvent(d); if(c) c.dispatchEvent(d);
-    });
+    KEYS.forEach(function(k){var d=new KeyboardEvent('keydown',{key:k.key,keyCode:k.kc,bubbles:true});document.dispatchEvent(d);if(c)c.dispatchEvent(d);});
     flags.forEach(function(n){try{if(window[n]===false)window[n]=true;}catch(e){}});
     starters.forEach(function(fn){try{if(typeof window[fn]==='function')window[fn]();}catch(e){}});
   }
-  [300,800,1500,2500].forEach(function(ms){
-    document.readyState==='complete'?setTimeout(go,ms):window.addEventListener('load',function(){setTimeout(go,ms);});
-  });
+  [300,800,1500,2500].forEach(function(ms){document.readyState==='complete'?setTimeout(go,ms):window.addEventListener('load',function(){setTimeout(go,ms);});});
 })();
 <\/script>`;
 
-function buildHtmlSrcdoc(htmlFile, cssFile, jsFile) {
+function buildHtmlDoc(htmlFile, cssFile, jsFile) {
+  if (!htmlFile?.content) return "";
   const isFullDoc = /<!DOCTYPE\s+html/i.test(htmlFile.content) || /<html[\s>]/i.test(htmlFile.content);
   if (isFullDoc) {
     let doc = htmlFile.content;
-    if (cssFile?.content) {
-      const tag = `<style>\n${cssFile.content}\n</style>`;
-      doc = /<\/head>/i.test(doc) ? doc.replace(/(<\/head>)/i, `${tag}\n$1`) : tag + doc;
-    }
-    if (jsFile?.content) {
-      const tag = `<script>\n${jsFile.content}\n<\/script>`;
-      doc = /<\/body>/i.test(doc) ? doc.replace(/(<\/body>)/i, `${tag}\n$1`) : doc + tag;
-    }
-    return /<\/body>/i.test(doc) ? doc.replace(/(<\/body>)/i, `${GAME_BOOT}\n$1`) : doc + GAME_BOOT;
+    if (cssFile?.content) { const t=`<style>\n${cssFile.content}\n</style>`; doc = /<\/head>/i.test(doc) ? doc.replace(/(<\/head>)/i,`${t}\n$1`) : t+doc; }
+    if (jsFile?.content)  { const t=`<script>\n${jsFile.content}\n<\/script>`; doc = /<\/body>/i.test(doc) ? doc.replace(/(<\/body>)/i,`${t}\n$1`) : doc+t; }
+    return /<\/body>/i.test(doc) ? doc.replace(/(<\/body>)/i,`${BOOT}\n$1`) : doc+BOOT;
   }
-  return `<!DOCTYPE html><html>
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<style>${cssFile?.content || ""}</style></head>
-<body>${htmlFile.content}
-<script>${jsFile?.content || ""}<\/script>${GAME_BOOT}</body></html>`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><style>${cssFile?.content||""}</style></head><body>${htmlFile.content}<script>${jsFile?.content||""}<\/script>${BOOT}</body></html>`;
 }
 
-function buildReactSrcdoc(files = []) {
-  // Babel + React CDN — transpiles JSX in the browser
-  const appFile   = files.find(f => normName(f.name).endsWith("app.jsx") || normName(f.name).endsWith("app.tsx") || normName(f.name) === "app.js");
-  const cssFile   = files.find(f => normName(f.name).endsWith(".css"));
-  const mainFile  = files.find(f => normName(f.name).includes("main") || normName(f.name).includes("index"));
-  const codeFile  = appFile || mainFile || files.find(f => f.name.match(/\.(jsx|tsx|js|ts)$/));
-
-  const allJsx = files
-    .filter(f => f.name.match(/\.(jsx|tsx)$/) && f !== codeFile)
-    .map(f => f.content)
-    .join("\n\n");
-
-  const code = [allJsx, codeFile?.content || ""].filter(Boolean).join("\n\n");
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>React Preview</title>
+function buildReactDoc(files = []) {
+  const appFile  = files.find(f => /app\.(jsx|tsx|js)$/i.test(f.name));
+  const cssFiles = files.filter(f => f.name.endsWith(".css")).map(f => f.content).join("\n");
+  const code     = files.filter(f => f.name.match(/\.(jsx|tsx|js|ts)$/)).map(f => f.content).join("\n\n");
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"><\/script>
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"><\/script>
-<script src="https://unpkg.com/lucide-react@latest/dist/umd/lucide-react.min.js"><\/script>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; }
-  body { background: #090d16; color: #e2e8f0; font-family: 'Inter', system-ui, sans-serif; }
-  ${cssFile?.content || ""}
-</style>
-</head>
-<body>
-<div id="root"></div>
+<style>*,*::before,*::after{box-sizing:border-box;margin:0}body{background:#090d16;color:#e2e8f0;font-family:system-ui,sans-serif}${cssFiles}</style>
+</head><body><div id="root"></div>
 <script type="text/babel" data-presets="react,typescript">
 ${code}
-
-// Auto-mount: try to find App, default export, or any component
-try {
-  const RootComponent = typeof App !== 'undefined' ? App
-    : typeof exports !== 'undefined' && exports.default ? exports.default
-    : null;
-  if (RootComponent) {
-    ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(RootComponent));
-  }
-} catch(e) {
-  document.getElementById('root').innerHTML =
-    '<div style="color:#ff6b6b;padding:20px;font-family:monospace">Error: ' + e.message + '</div>';
-}
-<\/script>
-</body>
-</html>`;
+try{
+  const RC=typeof App!=='undefined'?App:typeof Dashboard!=='undefined'?Dashboard:null;
+  if(RC)ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(RC));
+  else document.getElementById('root').innerHTML='<p style="padding:20px;color:#aaa">No default export found. Export a component named App.</p>';
+}catch(e){document.getElementById('root').innerHTML='<pre style="color:#ff6b6b;padding:20px">'+e.message+'</pre>';}
+<\/script></body></html>`;
 }
 
-function buildVueSrcdoc(files = []) {
+function buildVueDoc(files = []) {
   const vueFile = files.find(f => f.name.endsWith(".vue"));
-  const cssFile = files.find(f => f.name.endsWith(".css"));
-
-  // Extract script + template from .vue SFC
-  const scriptMatch   = vueFile?.content.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
-  const templateMatch = vueFile?.content.match(/<template[^>]*>([\s\S]*?)<\/template>/i);
-  const styleMatch    = vueFile?.content.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>
-<style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; }
-  body { background: #090d16; color: #e2e8f0; font-family: system-ui, sans-serif; }
-  ${styleMatch?.[1] || cssFile?.content || ""}
-</style>
-</head>
-<body>
-<div id="app">${templateMatch?.[1] || "<div>{{ message }}</div>"}</div>
-<script>
-const { createApp } = Vue;
-try {
-  ${scriptMatch?.[1]?.replace(/export default/, "const __component =") || "const __component = { data() { return { message: 'Vue Preview' }; } }"}
-  createApp(__component).mount('#app');
-} catch(e) {
-  document.getElementById('app').innerHTML = '<div style="color:#ff6b6b;padding:20px;font-family:monospace">Error: ' + e.message + '</div>';
-}
-<\/script>
-</body>
-</html>`;
+  const css     = files.find(f => f.name.endsWith(".css"));
+  const tpl     = vueFile?.content.match(/<template[^>]*>([\s\S]*?)<\/template>/i)?.[1] || "<div>{{ msg }}</div>";
+  const scr     = vueFile?.content.match(/<script[^>]*>([\s\S]*?)<\/script>/i)?.[1] || "";
+  const sty     = vueFile?.content.match(/<style[^>]*>([\s\S]*?)<\/style>/i)?.[1] || "";
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"/><script src="https://unpkg.com/vue@3/dist/vue.global.js"><\/script>
+<style>*{box-sizing:border-box;margin:0}body{background:#090d16;color:#e2e8f0;font-family:system-ui}${sty}${css?.content||""}</style>
+</head><body><div id="app">${tpl}</div>
+<script>try{${scr.replace(/export\s+default/,"const __c =")||"const __c={data(){return{msg:'Vue Preview'}}}"}Vue.createApp(__c).mount('#app');}catch(e){document.getElementById('app').innerHTML='<pre style="color:#ff6b6b;padding:20px">'+e.message+'</pre>';}<\/script></body></html>`;
 }
 
-async function downloadZip(files, title) {
-  try {
-    const zip  = new JSZip();
-    files.forEach(f => zip.file(f.name, f.content));
-    const blob = await zip.generateAsync({ type: "blob" });
-    const url  = URL.createObjectURL(blob);
-    const a    = Object.assign(document.createElement("a"), {
-      href: url,
-      download: `${title.replace(/[^a-z0-9]/gi, "-").toLowerCase()}.zip`,
-    });
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    console.error("ZIP failed:", e);
-  }
+async function doDownload(files, title) {
+  const zip  = new JSZip();
+  files.forEach(f => zip.file(f.name, f.content));
+  const blob = await zip.generateAsync({ type: "blob" });
+  const url  = URL.createObjectURL(blob);
+  const a    = Object.assign(document.createElement("a"), { href: url, download: `${title.replace(/[^a-z0-9]/gi,"-").toLowerCase()}.zip` });
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 // ─── Tree node ────────────────────────────────────────────────────────────────
@@ -234,12 +155,8 @@ function TreeNode({ name, node, onSelect, activeIdx, depth = 0 }) {
   if (node.__file) {
     const active = node.idx === activeIdx;
     return (
-      <button
-        onClick={() => onSelect(node.idx)}
-        style={{ paddingLeft: `${10 + depth * 12}px` }}
-        className={`w-full flex items-center gap-1.5 py-[3px] pr-2 text-[11px] text-left cursor-pointer border-none bg-transparent rounded-sm transition-colors
-          ${active ? "text-indigo-300 bg-indigo-500/10" : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]"}`}
-      >
+      <button onClick={() => onSelect(node.idx)} style={{ paddingLeft: `${10+depth*12}px` }}
+        className={`w-full flex items-center gap-1.5 py-[3px] pr-2 text-[11px] text-left cursor-pointer border-none bg-transparent rounded-sm transition-colors ${active ? "text-indigo-300 bg-indigo-500/10" : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]"}`}>
         <File size={10} style={{ color: fileColor(name), flexShrink: 0 }} />
         <span className="truncate">{name}</span>
       </button>
@@ -247,110 +164,55 @@ function TreeNode({ name, node, onSelect, activeIdx, depth = 0 }) {
   }
   return (
     <div>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{ paddingLeft: `${10 + depth * 12}px` }}
-        className="w-full flex items-center gap-1.5 py-[3px] pr-2 text-[11px] text-slate-500 hover:text-slate-300 cursor-pointer border-none bg-transparent"
-      >
+      <button onClick={() => setOpen(o => !o)} style={{ paddingLeft: `${10+depth*12}px` }}
+        className="w-full flex items-center gap-1.5 py-[3px] pr-2 text-[11px] text-slate-500 hover:text-slate-300 cursor-pointer border-none bg-transparent">
         {open ? <ChevronDown size={9} /> : <ChevronRight size={9} />}
         <Folder size={10} className="text-amber-400/70" />
         <span>{name}</span>
       </button>
       {open && Object.entries(node).map(([k, v]) => (
-        <TreeNode key={k} name={k} node={v} onSelect={onSelect} activeIdx={activeIdx} depth={depth + 1} />
+        <TreeNode key={k} name={k} node={v} onSelect={onSelect} activeIdx={activeIdx} depth={depth+1} />
       ))}
     </div>
   );
 }
 
-// ─── Container preview launcher ───────────────────────────────────────────────
+// ─── Container launcher (Python / Go / Rust / Java / Node) ───────────────────
 
 function ContainerPreview({ artifact, pType, onDownload }) {
-  const [status,  setStatus]  = useState("idle");   // idle | building | running | error | stopped
+  const [status,  setStatus]  = useState("idle");
   const [logs,    setLogs]    = useState("");
   const [session, setSession] = useState(null);
-  const eventSourceRef = useRef(null);
-  const logsRef = useRef(null);
+  const esRef    = useRef(null);
+  const logsRef  = useRef(null);
+  const meta     = TYPE_META[pType] || TYPE_META.node;
 
-  const meta = TYPE_META[pType] || TYPE_META.node;
+  useEffect(() => { if (logsRef.current) logsRef.current.scrollTop = logsRef.current.scrollHeight; }, [logs]);
+  useEffect(() => () => esRef.current?.close(), []);
 
-  const RUN_HINT = {
-    python:    "pip install -r requirements.txt && python app.py",
-    node:      "npm install && npm start",
-    react:     "npm install && npm run dev",
-    go:        "go run .",
-    rust:      "cargo run",
-    java:      "mvn spring-boot:run",
-    fullstack: "See README.md",
-  };
-
-  useEffect(() => {
-    if (logsRef.current) {
-      logsRef.current.scrollTop = logsRef.current.scrollHeight;
-    }
-  }, [logs]);
-
-  useEffect(() => () => eventSourceRef.current?.close(), []);
-
-  const startPreview = useCallback(async () => {
-    setStatus("building");
-    setLogs("⚡ Starting preview container...\n");
-    setSession(null);
-
+  const launch = useCallback(async () => {
+    esRef.current?.close();
+    setStatus("building"); setLogs("⚡ Starting container...\n"); setSession(null);
     try {
-      const res = await fetch(`${API_BASE}/api/preview/start`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ artifact }),
-      });
+      const res  = await fetch(`${API_BASE}/api/preview/start`, { method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include", body: JSON.stringify({ artifact }) });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Failed to start preview");
+      if (!res.ok) throw new Error(data.message || "Failed");
+      setSession(data.session);
+      setLogs(p => p + `📦 ${data.session.stack} container started\n`);
 
-      const newSession = data.session;
-      setSession(newSession);
-      setLogs(prev => prev + `📦 Container ${newSession.stack} starting...\n`);
-
-      // Subscribe to SSE log stream
-      const es = new EventSource(`${API_BASE}/api/preview/${newSession.id}/events`, { withCredentials: true });
-      eventSourceRef.current = es;
-
-      es.addEventListener("status", e => {
-        const payload = JSON.parse(e.data);
-        setStatus(payload.status === "running" ? "running" : payload.status === "error" ? "error" : "building");
-        setSession(payload);
-      });
-
-      es.addEventListener("logs", e => {
-        const { chunk } = JSON.parse(e.data);
-        setLogs(prev => prev + chunk);
-      });
-
-      es.addEventListener("done", e => {
-        const payload = JSON.parse(e.data);
-        setStatus(payload.status === "running" ? "running" : "error");
-        setSession(payload);
-        es.close();
-      });
-
-      es.onerror = () => {
-        setLogs(prev => prev + "\n⚠️  Connection to build stream lost.\n");
-        es.close();
-      };
-    } catch (err) {
-      setStatus("error");
-      setLogs(prev => prev + `\n❌ ${err.message}\n`);
-    }
+      const es = new EventSource(`${API_BASE}/api/preview/${data.session.id}/events`, { withCredentials: true });
+      esRef.current = es;
+      es.addEventListener("status", e => { const p = JSON.parse(e.data); setStatus(p.status === "running" ? "running" : p.status === "error" ? "error" : "building"); setSession(p); });
+      es.addEventListener("logs",   e => { const { chunk } = JSON.parse(e.data); setLogs(p => p + chunk); });
+      es.addEventListener("done",   e => { const p = JSON.parse(e.data); setStatus(p.status === "running" ? "running" : "error"); setSession(p); es.close(); });
+      es.onerror = () => { setLogs(p => p + "\n⚠️  Stream lost\n"); es.close(); };
+    } catch (err) { setStatus("error"); setLogs(p => p + `\n❌ ${err.message}\n`); }
   }, [artifact]);
 
-  const stopPreview = useCallback(async () => {
-    eventSourceRef.current?.close();
-    if (session?.id) {
-      await fetch(`${API_BASE}/api/preview/${session.id}`, { method: "DELETE", credentials: "include" });
-    }
-    setStatus("stopped");
-    setSession(null);
-    setLogs("");
+  const stop = useCallback(async () => {
+    esRef.current?.close();
+    if (session?.id) await fetch(`${API_BASE}/api/preview/${session.id}`, { method:"DELETE", credentials:"include" });
+    setStatus("stopped"); setSession(null); setLogs("");
   }, [session]);
 
   const isRunning = status === "running";
@@ -358,67 +220,56 @@ function ContainerPreview({ artifact, pType, onDownload }) {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Status bar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] shrink-0">
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${
-            isRunning ? "bg-green-400 animate-pulse" :
-            isLoading ? "bg-amber-400 animate-pulse" :
-            status === "error" ? "bg-red-400" : "bg-slate-600"
-          }`} />
+          <span className={`w-2 h-2 rounded-full ${isRunning?"bg-green-400 animate-pulse":isLoading?"bg-amber-400 animate-pulse":status==="error"?"bg-red-400":"bg-slate-600"}`} />
           <span className="text-[11px] text-slate-400 capitalize">{status === "idle" ? "Ready to launch" : status}</span>
         </div>
         <div className="flex items-center gap-2">
-          {status === "idle" || status === "stopped" || status === "error" ? (
-            <button onClick={startPreview} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-[11px] font-medium rounded-lg border-none cursor-pointer transition-colors">
+          {(status === "idle" || status === "stopped" || status === "error") && (
+            <button onClick={launch} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white text-[11px] font-medium rounded-lg border-none cursor-pointer transition-colors">
               <Play size={11} /> Launch Preview
             </button>
-          ) : (
-            <button onClick={stopPreview} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white text-[11px] font-medium rounded-lg border-none cursor-pointer transition-colors">
-              <Square size={11} /> Stop
+          )}
+          {isLoading && (
+            <button onClick={stop} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white text-[11px] font-medium rounded-lg border-none cursor-pointer transition-colors">
+              <Square size={11} /> Cancel
             </button>
           )}
           {status === "error" && (
-            <button onClick={startPreview} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-[11px] rounded-lg border-none cursor-pointer transition-colors">
-              <RefreshCw size={11} />
+            <button onClick={launch} className="flex items-center gap-1 px-2.5 py-1.5 bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-[11px] rounded-lg border-none cursor-pointer">
+              <RefreshCw size={11} /> Retry
+            </button>
+          )}
+          {isRunning && (
+            <button onClick={stop} className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/80 hover:bg-red-500 text-white text-[11px] font-medium rounded-lg border-none cursor-pointer transition-colors">
+              <Square size={11} /> Stop
             </button>
           )}
         </div>
       </div>
 
-      {/* Running iframe */}
-      {isRunning && session?.previewPath && (
-        <div className="flex-1 overflow-hidden">
-          <iframe
-            src={`${API_BASE}${session.previewPath}`}
-            className="w-full h-full"
-            style={{ border: "none" }}
-            title="container-preview"
-          />
-        </div>
-      )}
-
-      {/* Not running: info + logs */}
-      {!isRunning && (
+      {isRunning && session?.previewPath ? (
         <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Idle state */}
+          <iframe src={`${API_BASE}${session.previewPath}`} className="flex-1 w-full" style={{ border:"none" }} title="container-preview" />
+          {logs && (
+            <pre ref={logsRef} className="h-28 overflow-y-auto p-3 text-[10px] text-slate-400 font-mono border-t border-white/[0.06]" style={{scrollbarWidth:"thin"}}>{logs}</pre>
+          )}
+        </div>
+      ) : (
+        <div className="flex-1 flex flex-col overflow-hidden">
           {status === "idle" && (
             <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
-              <div className="w-14 h-14 rounded-2xl flex items-center justify-center border"
-                   style={{ background: `${meta.color}10`, borderColor: `${meta.color}25` }}>
-                <FiCode style={{ color: meta.color }} size={22} />
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center border" style={{background:`${meta.color}10`,borderColor:`${meta.color}25`}}>
+                <FiCode style={{color:meta.color}} size={22} />
               </div>
               <div>
                 <p className="text-slate-200 font-medium text-sm mb-1">{meta.label} Project</p>
-                <p className="text-slate-500 text-xs leading-relaxed max-w-[260px]">
-                  Launch a live container preview, or download the ZIP to run locally:
-                </p>
-                <code className="block mt-2 text-[10px] text-emerald-400/80 bg-emerald-500/5 border border-emerald-500/10 rounded-lg px-3 py-2 text-left">
-                  {RUN_HINT[pType] || "See README.md"}
-                </code>
+                <p className="text-slate-500 text-xs mb-2">Launch a live container preview, or download ZIP to run locally:</p>
+                <code className="block text-[10px] text-emerald-400/80 bg-emerald-500/5 border border-emerald-500/10 rounded-lg px-3 py-2 text-left">{RUN_HINT[pType] || "See README.md"}</code>
               </div>
               <div className="flex gap-2">
-                <button onClick={startPreview} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-medium border-none cursor-pointer transition-colors">
+                <button onClick={launch} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs font-medium border-none cursor-pointer transition-colors">
                   <Play size={13} /> Launch Preview
                 </button>
                 <button onClick={onDownload} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] text-slate-300 text-xs font-medium border-none cursor-pointer transition-colors">
@@ -427,38 +278,59 @@ function ContainerPreview({ artifact, pType, onDownload }) {
               </div>
             </div>
           )}
-
-          {/* Build logs */}
-          {(isLoading || status === "error" || status === "stopped") && logs && (
+          {(isLoading || status === "error" || status === "stopped") && (
             <div className="flex flex-col flex-1 overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-2 border-b border-white/[0.06] shrink-0">
                 <Terminal size={12} className="text-slate-500" />
                 <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Build Logs</span>
               </div>
-              <pre
-                ref={logsRef}
-                className="flex-1 overflow-y-auto p-4 text-[11px] text-slate-300 font-mono leading-relaxed"
-                style={{ scrollbarWidth: "thin" }}
-              >
-                {logs}
-              </pre>
+              <pre ref={logsRef} className="flex-1 overflow-y-auto p-4 text-[11px] text-slate-300 font-mono leading-relaxed" style={{scrollbarWidth:"thin"}}>{logs}</pre>
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Logs below iframe when running */}
-      {isRunning && logs && (
-        <div className="h-32 border-t border-white/[0.06] overflow-hidden">
-          <pre
-            ref={logsRef}
-            className="h-full overflow-y-auto p-3 text-[10px] text-slate-400 font-mono leading-relaxed"
-            style={{ scrollbarWidth: "thin" }}
-          >
-            {logs}
-          </pre>
+// ─── Reusable header ──────────────────────────────────────────────────────────
+
+function PanelHeader({ title, meta, tab, setTab, onClose, onCollapse, onCopy, onDownload, copied, isContainer }) {
+  return (
+    <div className="h-14 px-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
+      <button onClick={onClose ?? onCollapse} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] bg-transparent border-none cursor-pointer shrink-0 transition-colors">
+        {onClose ? <X size={15} /> : <PanelRightClose size={15} />}
+      </button>
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
+          <FiCode className="text-indigo-400" size={12} />
         </div>
-      )}
+        <h2 className="text-[13px] font-medium text-slate-200 truncate">{title}</h2>
+        <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
+          style={{ color: meta.color, background: `${meta.color}15`, border: `1px solid ${meta.color}28` }}>
+          {meta.label}
+        </span>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        {tab === "code" && (
+          <button onClick={onCopy} className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.05] rounded-lg bg-transparent border-none cursor-pointer transition-colors">
+            {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        )}
+        <button onClick={onDownload} className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/[0.08] rounded-lg bg-transparent border-none cursor-pointer transition-colors">
+          <Download size={12} /> ZIP
+        </button>
+        <div className="flex items-center gap-0.5 bg-white/[0.04] border border-white/[0.06] p-1 rounded-lg">
+          <button onClick={() => setTab("code")} className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${tab==="code"?"bg-indigo-500 text-white":"text-slate-500 hover:text-slate-200"}`}>
+            <Code2 size={11} /> Code
+          </button>
+          <button onClick={() => setTab("preview")} className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${tab==="preview"?"bg-indigo-500 text-white":"text-slate-500 hover:text-slate-200"}`}>
+            {isContainer ? <Play size={11} /> : <Eye size={11} />}
+            {isContainer ? "Run" : "Preview"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -466,7 +338,6 @@ function ContainerPreview({ artifact, pType, onDownload }) {
 // ─── Main panel ───────────────────────────────────────────────────────────────
 
 export default function ArtifactPanel() {
-  // ALL hooks unconditionally at top
   const [tab,        setTab]        = useState("code");
   const [activeFile, setActiveFile] = useState(0);
   const [collapsed,  setCollapsed]  = useState(false);
@@ -476,192 +347,114 @@ export default function ArtifactPanel() {
   const { artifacts } = useSelector(s => s.message);
   const artifact = artifacts?.[0];
 
-  const files    = useMemo(() => artifact?.files || [],   [artifact]);
-  const tree     = useMemo(() => buildTree(files),        [files]);
+  // ── All hooks above any conditional return ──────────────────────────────
+  const files    = useMemo(() => artifact?.files || [], [artifact]);
+  const tree     = useMemo(() => buildTree(files), [files]);
   const resolved = useMemo(() => resolveHtmlFiles(files), [files]);
+  const pType    = artifact?.projectType || "html";
+  const meta     = TYPE_META[pType] || TYPE_META.html;
 
-  // Determine which browser-native preview to use
-  const pType       = artifact?.projectType || "html";
-  const meta        = TYPE_META[pType] || TYPE_META.html;
-  const hasHtml     = Boolean(resolved.htmlFile);
-  const hasReactJsx = pType === "react" || files.some(f => f.name.match(/\.jsx$|\.tsx$/));
-  const hasVue      = pType === "vue"   || files.some(f => f.name.endsWith(".vue"));
-
-  const browserPreviewable = hasHtml || hasReactJsx || hasVue;
-  const containerStacks    = ["python","node","go","rust","java","fullstack"];
-  const needsContainer     = containerStacks.includes(pType) && !hasHtml;
+  const hasHtml        = Boolean(resolved.htmlFile);
+  const hasReactJsx    = pType === "react" || files.some(f => f.name.match(/\.(jsx|tsx)$/));
+  const hasVue         = pType === "vue"   || files.some(f => f.name.endsWith(".vue"));
+  const browserNative  = hasHtml || hasReactJsx || hasVue;
+  const needsContainer = ["python","node","go","rust","java","fullstack"].includes(pType) && !hasHtml;
 
   const srcdoc = useMemo(() => {
-    if (!browserPreviewable) return "";
-    if (hasHtml)     return buildHtmlSrcdoc(resolved.htmlFile, resolved.cssFile, resolved.jsFile);
-    if (hasReactJsx) return buildReactSrcdoc(files);
-    if (hasVue)      return buildVueSrcdoc(files);
+    if (hasHtml)     return buildHtmlDoc(resolved.htmlFile, resolved.cssFile, resolved.jsFile);
+    if (hasReactJsx) return buildReactDoc(files);
+    if (hasVue)      return buildVueDoc(files);
     return "";
-  }, [browserPreviewable, hasHtml, hasReactJsx, hasVue, resolved, files]);
+  }, [hasHtml, hasReactJsx, hasVue, resolved, files]);
 
-  // Safe early return — all hooks already called
+  // Safe early return AFTER all hooks
   if (!artifact) return null;
 
-  const file    = files[activeFile];
-  const hasTree = files.length > 1;
+  const file       = files[activeFile];
+  const hasTree    = files.length > 1;
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(file?.content || "");
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  const handleDownload = () => downloadZip(files, artifact.title);
+  const handleCopy     = () => { navigator.clipboard.writeText(file?.content || ""); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  const handleDownload = () => doDownload(files, artifact.title);
 
-  // ── Shared panel markup ──────────────────────────────────────────────────
-  const PanelInner = ({ onClose }) => (
-    <div className="flex flex-col h-full bg-[#0d0f14]">
-
-      {/* Header */}
-      <div className="h-14 px-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
-        <button
-          onClick={onClose ?? (() => setCollapsed(true))}
-          className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] bg-transparent border-none cursor-pointer shrink-0 transition-colors"
-        >
-          {onClose ? <X size={15} /> : <PanelRightClose size={15} />}
-        </button>
-
-        <div className="flex items-center gap-1.5 flex-1 min-w-0">
-          <div className="w-6 h-6 rounded-md bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shrink-0">
-            <FiCode className="text-indigo-400" size={12} />
-          </div>
-          <h2 className="text-[13px] font-medium text-slate-200 truncate">{artifact.title}</h2>
-          <span
-            className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wider"
-            style={{ color: meta.color, background: `${meta.color}15`, border: `1px solid ${meta.color}28` }}
-          >
-            {meta.label}
-          </span>
+  // ── Shared body (inline, no nested component) ────────────────────────────
+  const body = (
+    <div className="flex flex-1 overflow-hidden">
+      {/* File tree */}
+      {tab === "code" && hasTree && (
+        <div className="w-40 border-r border-white/[0.06] overflow-y-auto overflow-x-hidden shrink-0 py-2" style={{ scrollbarWidth: "none" }}>
+          <p className="px-3 pb-1 text-[9px] font-semibold text-slate-600 uppercase tracking-widest">Files</p>
+          {Object.entries(tree).map(([k, v]) => (
+            <TreeNode key={k} name={k} node={v} onSelect={setActiveFile} activeIdx={activeFile} />
+          ))}
         </div>
+      )}
 
-        <div className="flex items-center gap-1 shrink-0">
-          {tab === "code" && (
-            <button onClick={handleCopy} className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-slate-400 hover:text-slate-200 hover:bg-white/[0.05] rounded-lg bg-transparent border-none cursor-pointer transition-colors">
-              {copied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          )}
-          <button onClick={handleDownload} className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-slate-400 hover:text-emerald-300 hover:bg-emerald-500/[0.08] rounded-lg bg-transparent border-none cursor-pointer transition-colors">
-            <Download size={12} /> ZIP
-          </button>
-          <div className="flex items-center gap-0.5 bg-white/[0.04] border border-white/[0.06] p-1 rounded-lg">
-            <button
-              onClick={() => setTab("code")}
-              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors
-                ${tab === "code" ? "bg-indigo-500 text-white" : "text-slate-500 hover:text-slate-200"}`}
-            >
-              <Code2 size={11} /> Code
-            </button>
-            <button
-              onClick={() => setTab("preview")}
-              className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors
-                ${tab === "preview" ? "bg-indigo-500 text-white" : "text-slate-500 hover:text-slate-200"}`}
-            >
-              {needsContainer ? <Play size={11} /> : <Eye size={11} />}
-              {needsContainer ? "Run" : "Preview"}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Body */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* File tree */}
-        {tab === "code" && hasTree && (
-          <div className="w-40 border-r border-white/[0.06] overflow-y-auto overflow-x-hidden shrink-0 py-2" style={{ scrollbarWidth: "none" }}>
-            <p className="px-3 pb-1 text-[9px] font-semibold text-slate-600 uppercase tracking-widest">Files</p>
-            {Object.entries(tree).map(([k, v]) => (
-              <TreeNode key={k} name={k} node={v} onSelect={setActiveFile} activeIdx={activeFile} />
-            ))}
-          </div>
+      <div className="flex-1 overflow-hidden">
+        {/* Preview tab */}
+        {tab === "preview" && browserNative && (
+          <iframe
+            key="preview-frame"
+            title="preview"
+            sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-pointer-lock"
+            srcDoc={srcdoc}
+            className="w-full h-full"
+            style={{ border: "none", display: "block" }}
+            tabIndex={0}
+            onLoad={e => e.target.focus()}
+          />
+        )}
+        {tab === "preview" && needsContainer && (
+          <ContainerPreview key="container" artifact={artifact} pType={pType} onDownload={handleDownload} />
         )}
 
-        {/* Main area */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <AnimatePresence mode="wait">
-
-            {/* Browser-native preview */}
-            {tab === "preview" && browserPreviewable && (
-              <motion.div key="browser-preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex-1 w-full h-full">
-                <iframe
-                  title="preview"
-                  sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-pointer-lock"
-                  srcDoc={srcdoc}
-                  className="w-full h-full"
-                  style={{ border: "none" }}
-                  tabIndex={0}
-                  onLoad={e => e.target.focus()}
-                />
-              </motion.div>
-            )}
-
-            {/* Container preview (Python / Go / Rust / Java / Node) */}
-            {tab === "preview" && needsContainer && (
-              <motion.div key="container-preview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex-1 w-full h-full overflow-hidden">
-                <ContainerPreview artifact={artifact} pType={pType} onDownload={handleDownload} />
-              </motion.div>
-            )}
-
-            {/* Code editor */}
-            {tab === "code" && (
-              <motion.div key={`code-${activeFile}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="flex-1 w-full h-full overflow-hidden">
-                <Editor
-                  theme="vs-dark"
-                  language={detectLanguage(file?.name || "")}
-                  value={file?.content || ""}
-                  options={{
-                    readOnly: true, minimap: { enabled: false }, fontSize: 13,
-                    wordWrap: "on", automaticLayout: true, scrollBeyondLastLine: false,
-                    padding: { top: 16 }, lineNumbers: "on", renderLineHighlight: "none",
-                  }}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        {/* Code tab */}
+        {tab === "code" && (
+          <Editor
+            key={`editor-${activeFile}`}
+            theme="vs-dark"
+            language={detectLanguage(file?.name || "")}
+            value={file?.content || ""}
+            options={{ readOnly:true, minimap:{enabled:false}, fontSize:13, wordWrap:"on", automaticLayout:true, scrollBeyondLastLine:false, padding:{top:16}, lineNumbers:"on", renderLineHighlight:"none" }}
+          />
+        )}
       </div>
     </div>
   );
 
   return (
     <>
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed bottom-24 right-4 z-40 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[12px] font-medium shadow-lg shadow-indigo-500/20 border-none cursor-pointer"
-      >
+      {/* Mobile button */}
+      <button onClick={() => setMobileOpen(true)} className="lg:hidden fixed bottom-24 right-4 z-40 flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-[12px] font-medium shadow-lg shadow-indigo-500/20 border-none cursor-pointer">
         <FiCode size={13} /> View Code
       </button>
 
+      {/* Mobile drawer */}
       <AnimatePresence>
         {mobileOpen && (
           <>
-            <motion.div key="bd" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setMobileOpen(false)} className="lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-            <motion.div key="dr" initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ duration: 0.25, ease: "easeInOut" }} className="lg:hidden fixed inset-y-0 right-0 z-50 w-[88vw] max-w-[420px] border-l border-white/[0.06] overflow-hidden">
-              <PanelInner onClose={() => setMobileOpen(false)} />
+            <motion.div key="bd" initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}} onClick={() => setMobileOpen(false)} className="lg:hidden fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+            <motion.div key="dr" initial={{x:"100%"}} animate={{x:0}} exit={{x:"100%"}} transition={{duration:0.25,ease:"easeInOut"}} className="lg:hidden fixed inset-y-0 right-0 z-50 w-[88vw] max-w-[420px] border-l border-white/[0.06] overflow-hidden bg-[#0d0f14] flex flex-col">
+              <PanelHeader title={artifact.title} meta={meta} tab={tab} setTab={setTab} onClose={() => setMobileOpen(false)} onCollapse={() => {}} onCopy={handleCopy} onDownload={handleDownload} copied={copied} isContainer={needsContainer} />
+              {body}
             </motion.div>
           </>
         )}
       </AnimatePresence>
 
+      {/* Desktop panel */}
       <AnimatePresence initial={false}>
         {!collapsed ? (
-          <motion.div key="open" initial={{ width: 0, opacity: 0 }} animate={{ width: "clamp(380px, 44%, 760px)", opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.22, ease: "easeInOut" }} className="hidden lg:flex h-full border-l border-white/[0.06] flex-col overflow-hidden shrink-0">
-            <PanelInner />
+          <motion.div key="open" initial={{width:0,opacity:0}} animate={{width:"clamp(380px,44%,760px)",opacity:1}} exit={{width:0,opacity:0}} transition={{duration:0.22,ease:"easeInOut"}} className="hidden lg:flex h-full border-l border-white/[0.06] flex-col overflow-hidden shrink-0 bg-[#0d0f14]">
+            <PanelHeader title={artifact.title} meta={meta} tab={tab} setTab={setTab} onCollapse={() => setCollapsed(true)} onCopy={handleCopy} onDownload={handleDownload} copied={copied} isContainer={needsContainer} />
+            {body}
           </motion.div>
         ) : (
-          <motion.div key="col" initial={{ width: 0, opacity: 0 }} animate={{ width: 48, opacity: 1 }} exit={{ width: 0, opacity: 0 }} transition={{ duration: 0.22, ease: "easeInOut" }} className="hidden lg:flex h-full border-l border-white/[0.06] bg-[#0d0f14] flex-col items-center py-4 gap-3 shrink-0">
+          <motion.div key="col" initial={{width:0,opacity:0}} animate={{width:48,opacity:1}} exit={{width:0,opacity:0}} transition={{duration:0.22,ease:"easeInOut"}} className="hidden lg:flex h-full border-l border-white/[0.06] bg-[#0d0f14] flex-col items-center py-4 gap-3 shrink-0">
             <button onClick={() => setCollapsed(false)} className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] bg-transparent border-none cursor-pointer transition-colors">
               <PanelRightOpen size={15} />
             </button>
             <div className="flex-1 flex items-center justify-center">
-              <p className="text-[10px] font-medium text-slate-600 tracking-widest uppercase whitespace-nowrap" style={{ writingMode: "vertical-rl", transform: "rotate(180deg)" }}>
-                {artifact.title}
-              </p>
+              <p className="text-[10px] font-medium text-slate-600 tracking-widest uppercase whitespace-nowrap" style={{writingMode:"vertical-rl",transform:"rotate(180deg)"}}>{artifact.title}</p>
             </div>
           </motion.div>
         )}
