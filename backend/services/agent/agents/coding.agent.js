@@ -86,22 +86,42 @@ When this rule fires:
 - Do NOT fall back to HTML/JS unless the user says so
 
 ══════════════════════════════════════
-🟡 RULE 2 — GAMES DEFAULT (applies only when no language is specified)
+🟡 RULE 2 — GAMES & UI DEFAULT (applies only when no language is specified)
 ══════════════════════════════════════
 
-If the user asks for a GAME and does NOT specify a language:
+⚠️  CRITICAL: If the user asks for a GAME or interactive UI and does NOT specify a language,
+you MUST output a SINGLE self-contained FILE: index.html. NO Python. NO Node.js. NO exceptions.
 
+Game keywords that ALWAYS trigger this rule (no language = HTML only):
+- tic tac toe, snake, chess, tetris, pacman, flappy bird, breakout, sudoku,
+  pong, minesweeper, 2048, memory game, quiz, hangman, typing game, card game,
+  platformer, shooter, puzzle, word game, maze, dice, rpg, tower defense
+
+When this rule fires:
 1. Output EXACTLY ONE file: FILE: index.html
 2. Include ALL CSS inside <style> tags in the HTML
 3. Include ALL JavaScript inside <script> tags in the HTML
-4. Use vanilla JavaScript + HTML5 Canvas
+4. Use vanilla JavaScript + HTML5 Canvas (or DOM for board games)
 5. Implement COMPLETE game logic: physics, collision, scoring, lives, win/lose states
 6. Use requestAnimationFrame for the game loop
 7. Draw everything procedurally on canvas — no external images
 8. Start rendering IMMEDIATELY on load — never wait for user input before drawing
 9. Show "Press Arrow Key / Space to Play" as text overlay ON the canvas
 
+BAD (never do this for games without explicit language):
+❌ FILE: app.py + requirements.txt  (Python is a server language, not for browser games)
+❌ FILE: index.js + package.json    (Node.js is a server language, not for browser games)
+
 BUT: If user says "snake game in Python" → Python wins (Rule 1 overrides).
+
+══════════════════════════════════════
+🔵 RULE 3 — WEBSITE / APP DEFAULT (no language specified)
+══════════════════════════════════════
+
+If the user asks for a website, landing page, dashboard, portfolio, e-commerce, blog,
+or ANY frontend UI and does NOT specify a language:
+→ Use Vanilla HTML + CSS + JS (3 files: index.html, style.css, script.js)
+→ NEVER default to Python, Ruby, or server-side languages for frontend work
 
 ══════════════════════════════════════
 INTENT DETECTION
@@ -293,17 +313,21 @@ ${state.prompt}`);
   }
 
   // ── Detect project type for frontend display ────────────────────────────────
-  const hasHtml    = files.some(f => f.name.endsWith(".html"));
-  const hasReact   = files.some(f => f.name.match(/\.(jsx|tsx)$/));
-  const hasPython  = files.some(f => f.name.endsWith(".py"));
-  const hasNode    = files.some(f => f.name === "package.json");
+  // Priority: fullstack > react > html > python > node
+  // html intentionally beats python/node — if an index.html exists the LLM
+  // generated a browser-renderable project, no Docker container needed.
+  const hasHtml     = files.some(f => f.name.endsWith(".html"));
+  const hasReact    = files.some(f => f.name.match(/\.(jsx|tsx)$/));
+  const hasPython   = files.some(f => f.name.endsWith(".py"));
+  const hasNode     = files.some(f => f.name === "package.json");
   const isFullStack = files.some(f => f.name.startsWith("backend/") || f.name.startsWith("server/") || f.name.startsWith("api/"));
 
   let projectType = "html";
-  if (isFullStack)   projectType = "fullstack";
-  else if (hasReact) projectType = "react";
-  else if (hasPython) projectType = "python";
-  else if (hasNode && !hasHtml) projectType = "node";
+  if (isFullStack)           projectType = "fullstack";
+  else if (hasReact)         projectType = "react";
+  else if (hasHtml)          projectType = "html";      // html beats python/node
+  else if (hasPython)        projectType = "python";
+  else if (hasNode)          projectType = "node";
 
   return {
     ...state,
