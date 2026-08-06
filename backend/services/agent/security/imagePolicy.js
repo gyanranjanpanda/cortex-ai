@@ -292,9 +292,11 @@ export const enforceImagePromptPolicyAsync = async (prompt) => {
   const endpoint = process.env.IMAGE_CLASSIFIER_URL;
 
   if (!endpoint) {
-    const required =
-      process.env.IMAGE_CLASSIFIER_REQUIRED === "true" ||
-      (process.env.NODE_ENV === "production" && process.env.IMAGE_CLASSIFIER_REQUIRED !== "false");
+    // The remote semantic classifier is optional infrastructure.
+    // Only block when IMAGE_CLASSIFIER_REQUIRED is explicitly "true" —
+    // defaulting to required-in-production blocked every image request
+    // when no classifier service is deployed (same pattern as imageModeration.js).
+    const required = process.env.IMAGE_CLASSIFIER_REQUIRED === "true";
     if (required) throw securityError(503, "Image semantic classifier is unavailable.", "IMAGE_CLASSIFIER_UNAVAILABLE");
     return local;
   }

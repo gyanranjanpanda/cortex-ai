@@ -90,79 +90,59 @@ async(req,res,next)=>{
 
   audit("request.accepted", { prompt, userId, tenantId, traceId, agent, modality, classifierSignals, budgetReservation, policyDecision: requestPolicy, risk: assessRisk({ text: prompt }) }, { piiRedacted: piiFindings });
 
-await addMessage(
- conversationId,
- "user",
- prompt
-);
+await addMessage(conversationId, "user", prompt);
 
-await axios.post(`${process.env.CHAT_SERVICE}/save-message`,{
-  conversationId,
-  role:"user",
-  content:prompt
-})
-
-
-
-
-
-
-
-  const result =
-  await graph.invoke({
-
-   prompt,
-
-   conversationId,
-
-   userId,
-   tenantId,
-   traceId,
-   approvalId,
-   requestPolicy,
-   modality,
-   classifierSignals,
-   budgetReservation,
-   agent,
-   file:req.file
-
+  await axios.post(`${process.env.CHAT_SERVICE}/save-message`, {
+    conversationId,
+    role: "user",
+    content: prompt,
   });
 
+  const result = await graph.invoke({
+    prompt,
+    conversationId,
+    userId,
+    tenantId,
+    traceId,
+    approvalId,
+    requestPolicy,
+    modality,
+    classifierSignals,
+    budgetReservation,
+    agent,
+    file: req.file,
+  });
 
-  await addMessage(
- conversationId,
- "assistant",
- result.response
-);
-await axios.post(
- `${process.env.CHAT_SERVICE}/save-message`,
- {
-  conversationId,
-  role:"assistant",
- content:result.response,
-  images:result.images || [],
-  artifacts:
-  result.artifacts || []
- }
-)
+  // PDF/PPT agents store the real download URL in result.downloadUrl to avoid
+  // the PII sanitizer in outputValidationNode corrupting S3 presigned URLs
+  // (long digit sequences in presigned URLs match the PHONE PII regex).
+  // Inject the real URL here after all sanitization is complete.
+  let finalResponse = result.response || "";
+  if (result.downloadUrl) {
+    finalResponse = finalResponse
+      .replace("{{PDF_DOWNLOAD_URL}}", result.downloadUrl)
+      .replace("{{PPT_DOWNLOAD_URL}}", result.downloadUrl);
+  }
 
- return res.json({
+  await addMessage(conversationId, "assistant", finalResponse);
+  await axios.post(`${process.env.CHAT_SERVICE}/save-message`, {
+    conversationId,
+    role: "assistant",
+    content: finalResponse,
+    images:    result.images    || [],
+    artifacts: result.artifacts || [],
+  });
 
- success:true,
+  return res.json({
+    success:   true,
+    answer:    finalResponse,
+    images:    result.images    || [],
+    artifacts: result.artifacts || [],
+    traceId,
+  });
 
- answer:
- result.response,
- images:result.images || [],
- artifacts:
- result.artifacts || [],
- traceId
-
-});
-
- }catch(error){
-
-  next(error)
-
+ } catch(error) {
+   next(error);
  }
 
 }

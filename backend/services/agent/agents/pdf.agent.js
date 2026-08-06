@@ -162,33 +162,31 @@ Rules:
     const pdfBuffer =
       Buffer.concat(chunks);
 
-    await uploadToS3(
+    const uploadResult = await uploadToS3(
       pdfBuffer,
       fileName,
       "application/pdf"
     );
 
-    const downloadUrl =
-      await getDownloadUrl(
-        fileName,
-        24*60*60,
-        "application/pdf"
-      );
+    const downloadUrl = await getDownloadUrl(
+      uploadResult,
+      24 * 60 * 60,
+      "application/pdf"
+    );
 
     return {
-
       ...state,
-
-response: `
-# ✅ PDF Generated Successfully
-
-📄 **${generatedTitle}**
-
-📥 [Download PDF](${downloadUrl})
-
-⏳ Link expires in 10 minutes.
-`.trim()
-
+      // Store URL separately — outputValidationNode runs PII sanitization on
+      // state.response (LLM text) which would corrupt S3 presigned URLs containing
+      // long digit sequences. The controller injects the real URL after validation.
+      downloadUrl,
+      response: [
+        "# ✅ PDF Generated Successfully",
+        "",
+        `📄 **${generatedTitle}**`,
+        "",
+        `📥 [Download PDF]({{PDF_DOWNLOAD_URL}})`,
+      ].join("\n"),
     };
 
   } catch (error) {

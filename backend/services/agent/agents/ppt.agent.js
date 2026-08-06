@@ -351,32 +351,30 @@ const buffer =
     outputType: "nodebuffer"
   });
 
-await uploadToS3(
+const uploadResult = await uploadToS3(
   buffer,
   fileName,
   "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 );
 
-const downloadUrl =
-  await getDownloadUrl(
-    fileName,
-    24*60*60,
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-  );
+const downloadUrl = await getDownloadUrl(
+  uploadResult,
+  24 * 60 * 60,
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+);
 
     return {
   ...state,
-
-  response: `
-# ✅ Presentation Generated Successfully
-
-📊 **${parsed.title}**
-
-📥 [Download PPT](${downloadUrl})
-
-⏳ Link expires in 10 minutes.
-`
+  downloadUrl,
+  response: [
+    "# ✅ Presentation Generated Successfully",
+    "",
+    `📊 **${parsed.title}**`,
+    "",
+    "📥 [Download PPT]({{PPT_DOWNLOAD_URL}})",
+  ].join("\n"),
 };
+
   } catch (error) {
     console.log("PPT Agent Error:", error);
     return { ...state, response: "Failed to generate presentation." };
