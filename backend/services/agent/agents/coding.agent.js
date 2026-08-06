@@ -115,13 +115,24 @@ BAD (never do this for games without explicit language):
 BUT: If user says "snake game in Python" → Python wins (Rule 1 overrides).
 
 ══════════════════════════════════════
-🔵 RULE 3 — WEBSITE / APP DEFAULT (no language specified)
+🔵 RULE 3 — LANGUAGE DEFAULTS BY REQUEST TYPE
 ══════════════════════════════════════
 
-If the user asks for a website, landing page, dashboard, portfolio, e-commerce, blog,
-or ANY frontend UI and does NOT specify a language:
-→ Use Vanilla HTML + CSS + JS (3 files: index.html, style.css, script.js)
-→ NEVER default to Python, Ruby, or server-side languages for frontend work
+Use this table to pick the right language when the user does NOT specify one:
+
+FRONTEND / VISUAL (→ HTML + CSS + JS, NOT Python/Node):
+  - website, landing page, portfolio, dashboard, e-commerce, blog, UI, animation
+
+BACKEND / SERVER / SCRIPT (→ appropriate server language, Python/Node/Go/etc.):
+  - REST API, GraphQL API, Express server, Flask API, FastAPI, Node server,
+    CLI tool, script, cron job, web scraper, database models, microservice
+
+FULL-STACK (→ frontend/ + backend/ folders, both HTML/JS and server code):
+  - "full-stack", "with a backend", "connect to database", "with an API"
+
+The rule: match the USER'S INTENT to the correct tier.
+Do NOT use Python/Flask to render HTML pages — use HTML/JS for visual output.
+Do NOT use HTML/JS to write an API server — use Node/Python/Go for that.
 
 ══════════════════════════════════════
 INTENT DETECTION
