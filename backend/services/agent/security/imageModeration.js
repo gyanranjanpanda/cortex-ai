@@ -5,8 +5,10 @@ export const moderateGeneratedImage = async ({ buffer, contentType, traceId }) =
   const hash = crypto.createHash("sha256").update(buffer).digest("hex");
   const endpoint = process.env.IMAGE_MODERATION_URL;
   if (!endpoint) {
-    const required = process.env.IMAGE_MODERATION_REQUIRED === "true"
-      || (process.env.NODE_ENV === "production" && process.env.IMAGE_MODERATION_REQUIRED !== "false");
+    // Moderation is only enforced when IMAGE_MODERATION_REQUIRED is explicitly
+    // set to "true". Defaulting to required-in-production silently broke image
+    // generation for deployments that have no moderation service configured.
+    const required = process.env.IMAGE_MODERATION_REQUIRED === "true";
     if (required) {
       throw securityError(503, "Image moderation is unavailable; the image was not published.", "IMAGE_MODERATION_UNAVAILABLE");
     }

@@ -16,16 +16,16 @@ import { motion, AnimatePresence } from "framer-motion";
 const API_BASE = import.meta.env.VITE_GATEWAY_URL || "";
 
 const TYPE_META = {
-  html:      { label: "HTML/CSS/JS", color: "#e34c26" },
-  react:     { label: "React",       color: "#61dafb" },
-  vue:       { label: "Vue",         color: "#42b883" },
-  svelte:    { label: "Svelte",      color: "#ff3e00" },
-  node:      { label: "Node.js",     color: "#8bc34a" },
-  python:    { label: "Python",      color: "#3572A5" },
-  go:        { label: "Go",          color: "#00acd7" },
-  rust:      { label: "Rust",        color: "#dea584" },
-  java:      { label: "Java",        color: "#b07219" },
-  fullstack: { label: "Full-Stack",  color: "#8b5cf6" },
+  html:      { label: "HTML/CSS/JS",   color: "#e34c26" },
+  react:     { label: "React",         color: "#61dafb" },
+  vue:       { label: "Vue",           color: "#42b883" },
+  svelte:    { label: "Svelte",        color: "#ff3e00" },
+  node:      { label: "Node.js",       color: "#8bc34a" },
+  python:    { label: "Python",        color: "#3572A5" },
+  go:        { label: "Go",            color: "#00acd7" },
+  rust:      { label: "Rust",          color: "#dea584" },
+  java:      { label: "Java",          color: "#b07219" },
+  fullstack: { label: "Full-Stack",    color: "#8b5cf6" },
 };
 
 const RUN_HINT = {
@@ -330,7 +330,7 @@ function ContainerPreview({ artifact, pType, onDownload }) {
 
 // ─── Reusable header ──────────────────────────────────────────────────────────
 
-function PanelHeader({ title, meta, tab, setTab, onClose, onCollapse, onCopy, onDownload, copied, isContainer }) {
+function PanelHeader({ title, meta, tab, setTab, onClose, onCollapse, onCopy, onDownload, copied, isContainer, isApiExplorer }) {
   return (
     <div className="h-14 px-3 border-b border-white/[0.06] flex items-center gap-2 shrink-0">
       <button onClick={onClose ?? onCollapse} className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-slate-200 hover:bg-white/[0.05] bg-transparent border-none cursor-pointer shrink-0 transition-colors">
@@ -361,8 +361,8 @@ function PanelHeader({ title, meta, tab, setTab, onClose, onCollapse, onCopy, on
             <Code2 size={11} /> Code
           </button>
           <button onClick={() => setTab("preview")} className={`flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors ${tab==="preview"?"bg-indigo-500 text-white":"text-slate-500 hover:text-slate-200"}`}>
-            {isContainer ? <Play size={11} /> : <Eye size={11} />}
-            {isContainer ? "Run" : "Preview"}
+            {isContainer ? <Play size={11} /> : isApiExplorer ? <Eye size={11} /> : <Eye size={11} />}
+            {isContainer ? "Run" : isApiExplorer ? "Explorer" : "Preview"}
           </button>
         </div>
       </div>
@@ -393,10 +393,12 @@ export default function ArtifactPanel() {
   const hasReactJsx    = pType === "react" || files.some(f => f.name.match(/\.(jsx|tsx)$/));
   const hasVue         = pType === "vue"   || files.some(f => f.name.endsWith(".vue"));
   const browserNative  = hasHtml || hasReactJsx || hasVue;
-  // Only show container launcher if there is truly NO previewable browser file.
-  // This prevents Python/etc projectType from showing Docker UI when the LLM
-  // actually generated an index.html (e.g. angry bird game mislabelled as python).
+  // needsContainer is ONLY true when there is absolutely no HTML/JSX/Vue file at all.
+  // If the coding agent generated an index.html API explorer alongside backend code,
+  // browserNative = true and the iframe is used instead of the Docker launcher.
   const needsContainer = !browserNative && ["python","node","go","rust","java","fullstack"].includes(pType);
+  // Whether the preview is showing an API explorer (backend project with generated HTML)
+  const isApiExplorer  = hasHtml && ["python","node","go","rust","java","fullstack"].includes(pType);
 
   // Auto-switch to preview tab whenever a fresh artifact with previewable content arrives.
   useEffect(() => {
@@ -417,6 +419,7 @@ export default function ArtifactPanel() {
     return "";
   }, [hasHtml, hasReactJsx, hasVue, resolved, files]);
 
+  // ── All hooks above any conditional return ──────────────
   // Safe early return AFTER all hooks
   if (!artifact) return null;
 
@@ -442,19 +445,26 @@ export default function ArtifactPanel() {
       <div className="flex-1 min-h-0 min-w-0 overflow-hidden relative">
         {/* Preview tab — browser-native (HTML / React / Vue) */}
         {tab === "preview" && browserNative && (
-          <iframe
-            key={`preview-${artifact?.id}-${srcdoc.length}`}
-            title="preview"
-            sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-pointer-lock allow-popups"
-            srcDoc={srcdoc}
-            className="w-full h-full"
-            style={{ border: "none", display: "block", position: "absolute", inset: 0 }}
-            tabIndex={0}
-            onLoad={e => { try { e.target.focus(); } catch (_) {} }}
-          />
+          <>
+            {isApiExplorer && (
+              <div className="absolute top-0 left-0 right-0 z-10 flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border-b border-indigo-500/20">
+                <span className="text-[10px] text-indigo-300 font-medium">🔍 API Explorer — generated alongside your backend code</span>
+              </div>
+            )}
+            <iframe
+              key={`preview-${artifact?.id}-${srcdoc.length}`}
+              title="preview"
+              sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-pointer-lock allow-popups"
+              srcDoc={srcdoc}
+              className="w-full h-full"
+              style={{ border: "none", display: "block", position: "absolute", inset: isApiExplorer ? "32px 0 0 0" : 0 }}
+              tabIndex={0}
+              onLoad={e => { try { e.target.focus(); } catch (_) {} }}
+            />
+          </>
         )}
 
-        {/* Preview tab — server container (Python / Node / Go / etc.) */}
+        {/* Preview tab — server container (Python / Node / Go / etc.) — only when truly no HTML */}
         {tab === "preview" && needsContainer && (
           <ContainerPreview key={`container-${artifact?.id}`} artifact={artifact} pType={pType} onDownload={handleDownload} />
         )}
