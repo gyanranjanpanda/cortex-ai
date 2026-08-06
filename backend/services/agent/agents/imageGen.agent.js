@@ -117,11 +117,11 @@ ${state.prompt}
     let downloadUrl;
 
     if (s3Configured) {
-      const fileName = `image-${crypto.randomUUID()}.${extension}`;
+      const fileName  = `image-${crypto.randomUUID()}.${extension}`;
       await uploadToS3(imageBuffer, fileName, contentType);
-      downloadUrl = await getDownloadUrl(fileName, 10 * 60);
+      downloadUrl = await getDownloadUrl(fileName, 10 * 60, contentType);
     } else {
-      // Direct provider URL — no expiry, no storage cost. Sufficient for demos.
+      // Direct Pollinations URL — no expiry, no storage cost. Sufficient for demos.
       downloadUrl = imageUrl;
     }
 

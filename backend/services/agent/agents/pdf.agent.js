@@ -171,7 +171,8 @@ Rules:
     const downloadUrl =
       await getDownloadUrl(
         fileName,
-        24*60*60
+        24*60*60,
+        "application/pdf"
       );
 
     return {
