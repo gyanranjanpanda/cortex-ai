@@ -1,6 +1,6 @@
 import PDFDocument from "pdfkit";
+import crypto from "crypto";
 import { getModel } from "../utils/model.js";
-
 import { uploadToS3 } from "../utils/uploadToS3.js";
 import { getDownloadUrl } from "../utils/getDownloadUrl.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
@@ -68,8 +68,8 @@ Rules:
         .replace(/#/g, "")
         .trim();
 
-    const fileName =
-      `pdf-${Date.now()}.pdf`;
+    // Use UUID (hex chars only) so the filename never matches the PHONE PII regex
+    const fileName = `pdf-${crypto.randomUUID()}.pdf`;
 
     const doc =
       new PDFDocument({

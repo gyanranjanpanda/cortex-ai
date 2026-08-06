@@ -1,4 +1,5 @@
 import pptxgen from "pptxgenjs";
+import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { getModel } from "../utils/model.js";
@@ -342,9 +343,8 @@ Title: Conclusion
       }
     });
 
-    // Save
-   const fileName =
-  `ppt-${Date.now()}.pptx`;
+    // Use UUID (hex chars only) so the filename never matches the PHONE PII regex
+   const fileName = `ppt-${crypto.randomUUID()}.pptx`;
 
 const buffer =
   await ppt.write({
