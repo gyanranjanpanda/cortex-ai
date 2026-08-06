@@ -398,6 +398,18 @@ export default function ArtifactPanel() {
   // actually generated an index.html (e.g. angry bird game mislabelled as python).
   const needsContainer = !browserNative && ["python","node","go","rust","java","fullstack"].includes(pType);
 
+  // Auto-switch to preview tab whenever a fresh artifact with previewable content arrives.
+  useEffect(() => {
+    if (!artifact) return;
+    if (browserNative || needsContainer) {
+      setTab("preview");
+      setActiveFile(0);
+    } else {
+      setTab("code");
+      setActiveFile(0);
+    }
+  }, [artifact?.id]);
+
   const srcdoc = useMemo(() => {
     if (hasHtml)     return buildHtmlDoc(resolved.htmlFile, resolved.cssFile, resolved.jsFile);
     if (hasReactJsx) return buildReactDoc(files);
@@ -416,7 +428,7 @@ export default function ArtifactPanel() {
 
   // ── Shared body (inline, no nested component) ────────────────────────────
   const body = (
-    <div className="flex flex-1 overflow-hidden">
+    <div className="flex flex-1 min-h-0 overflow-hidden">
       {/* File tree */}
       {tab === "code" && hasTree && (
         <div className="w-40 border-r border-white/[0.06] overflow-y-auto overflow-x-hidden shrink-0 py-2" style={{ scrollbarWidth: "none" }}>
@@ -427,28 +439,30 @@ export default function ArtifactPanel() {
         </div>
       )}
 
-      <div className="flex-1 overflow-hidden">
-        {/* Preview tab */}
+      <div className="flex-1 min-h-0 min-w-0 overflow-hidden relative">
+        {/* Preview tab — browser-native (HTML / React / Vue) */}
         {tab === "preview" && browserNative && (
           <iframe
-            key="preview-frame"
+            key={`preview-${artifact?.id}-${srcdoc.length}`}
             title="preview"
-            sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-pointer-lock"
+            sandbox="allow-scripts allow-same-origin allow-modals allow-forms allow-pointer-lock allow-popups"
             srcDoc={srcdoc}
             className="w-full h-full"
-            style={{ border: "none", display: "block" }}
+            style={{ border: "none", display: "block", position: "absolute", inset: 0 }}
             tabIndex={0}
-            onLoad={e => e.target.focus()}
+            onLoad={e => { try { e.target.focus(); } catch (_) {} }}
           />
         )}
+
+        {/* Preview tab — server container (Python / Node / Go / etc.) */}
         {tab === "preview" && needsContainer && (
-          <ContainerPreview key="container" artifact={artifact} pType={pType} onDownload={handleDownload} />
+          <ContainerPreview key={`container-${artifact?.id}`} artifact={artifact} pType={pType} onDownload={handleDownload} />
         )}
 
         {/* Code tab */}
         {tab === "code" && (
           <Editor
-            key={`editor-${activeFile}`}
+            key={`editor-${activeFile}-${artifact?.id}`}
             theme="vs-dark"
             language={detectLanguage(file?.name || "")}
             value={file?.content || ""}
@@ -482,7 +496,7 @@ export default function ArtifactPanel() {
       {/* Desktop panel */}
       <AnimatePresence initial={false}>
         {!collapsed ? (
-          <motion.div key="open" initial={{width:0,opacity:0}} animate={{width:"clamp(380px,44%,760px)",opacity:1}} exit={{width:0,opacity:0}} transition={{duration:0.22,ease:"easeInOut"}} className="hidden lg:flex h-full border-l border-white/[0.06] flex-col overflow-hidden shrink-0 bg-[#0d0f14]">
+          <motion.div key="open" initial={{width:0,opacity:0}} animate={{width:"clamp(380px,44%,760px)",opacity:1}} exit={{width:0,opacity:0}} transition={{duration:0.22,ease:"easeInOut"}} className="hidden lg:flex h-full border-l border-white/[0.06] flex-col overflow-hidden shrink-0 bg-[#0d0f14]" style={{minHeight:0}}>
             <PanelHeader title={artifact.title} meta={meta} tab={tab} setTab={setTab} onCollapse={() => setCollapsed(true)} onCopy={handleCopy} onDownload={handleDownload} copied={copied} isContainer={needsContainer} />
             {body}
           </motion.div>

@@ -51,7 +51,9 @@ app.use(cookieParser());
 app.use(helmet({ contentSecurityPolicy: false })); // CSP handled separately
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-app.use("/api/auth", proxy(process.env.AUTH_SERVICE));
+app.use("/api/auth", proxy(process.env.AUTH_SERVICE, {
+  proxyReqPathResolver: (req) => req.url,
+}));
 app.use(express.json());
 app.use("/api/me", protect, getCurrentUser);
 

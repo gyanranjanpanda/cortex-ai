@@ -7,6 +7,8 @@ export const proxyWithUser =
  return proxy(
   serviceUrl,
   {
+   // req.url is already stripped of the gateway mount prefix by Express
+   proxyReqPathResolver: (req) => req.url,
 
    proxyReqOptDecorator:
    (proxyReqOpts, srcReq)=>{

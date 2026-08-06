@@ -18,6 +18,8 @@ new mongoose.Schema({
 
   type:String,
 
+  projectType:String,
+
   title:String,
 
   files:[fileSchema],
