@@ -5,6 +5,7 @@ import { uploadToS3 } from "../utils/uploadToS3.js";
 import { getDownloadUrl } from "../utils/getDownloadUrl.js";
 import { checkAgentLimit } from "../config/agentRateLimit.js";
 import { deductCredits } from "../utils/deductCredits.js";
+import { isS3Configured } from "../utils/s3.js";
 import crypto from "crypto";
 import { moderateGeneratedImage } from "../security/imageModeration.js";
 import { audit } from "../security/audit.js";
@@ -111,11 +112,7 @@ ${state.prompt}
     // S3 is optional: when AWS credentials are not configured (e.g. Railway
     // without an S3 bucket), serve the Pollinations URL directly. Images are
     // still quarantined and moderated above — only the storage backend differs.
-    const s3Configured =
-      process.env.AWS_ACCESS_KEY_ID &&
-      !process.env.AWS_ACCESS_KEY_ID.toLowerCase().includes("add") &&
-      process.env.AWS_BUCKET_NAME &&
-      !process.env.AWS_BUCKET_NAME.toLowerCase().includes("add");
+    const s3Configured = isS3Configured();
 
     let downloadUrl;
 
